@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel do Atendente - SSE Queue Control</title>
+  <link rel="stylesheet" href="/css/global.css">
+  <link rel="stylesheet" href="/css/atendente.css">
+</head>
+<body>
+
+  <div class="atendente-container">
+    <header class="atendente-header">
+      <h1>
+        <span>💻</span> SISTEMA DE FILAS SSE - PAINEL DO ATENDENTE
+      </h1>
+
+      <div style="display: flex; align-items: center; gap: 20px;">
+        <div class="guiche-selector">
+          <label for="guicheSelect">Guichê Atual:</label>
+          <select id="guicheSelect">
+            <option value="1">Guichê 01 - Ana Souza</option>
+            <option value="2">Guichê 02 - Marcos Oliveira</option>
+            <option value="3" selected>Guichê 03 - Carlos Eduardo</option>
+            <option value="4">Guichê 04 - Juliana Lima</option>
+          </select>
+        </div>
+
+        <div id="statusSseBadge" class="status-badge">
+          <span class="status-dot"></span> [SSE OK]
+        </div>
+      </div>
+    </header>
+
+    <div class="dashboard-grid">
+      <!-- Painel de Controle de Chamada -->
+      <div class="card-control">
+        <div class="card-title">
+          <span>GUICHÊ DE CONTROLE</span>
+          <span>⚙️</span>
+        </div>
+
+        <div class="operator-info">
+          <div><strong>Operador Logado:</strong> <span id="operatorName">Carlos Eduardo (ID 402)</span></div>
+          <div><strong>Prioridade:</strong> Preferencial &amp; Geral</div>
+        </div>
+
+        <div class="current-ticket-display">
+          <div class="current-ticket-label">SENHA EM ATENDIMENTO</div>
+          <div id="senhaAtualDisplay" class="current-ticket-number">---</div>
+        </div>
+
+        <div class="action-buttons">
+          <button id="btnChamarProximo" class="btn btn-green btn-chamar-proximo">
+            ➔ CHAMAR PRÓXIMA SENHA
+          </button>
+
+          <div class="secondary-actions">
+            <button id="btnRechamar" class="btn btn-blue">
+              🔊 RECHAMAR
+            </button>
+            <button id="btnAusente" class="btn btn-red">
+              ✖ AUSENTE
+            </button>
+          </div>
+
+          <button id="btnFinalizar" class="btn btn-secondary" style="margin-top: 6px;">
+            ✓ FINALIZAR ATENDIMENTO
+          </button>
+        </div>
+      </div>
+
+      <!-- Visão da Fila e Estatísticas -->
+      <div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div id="statTotalAguardando" class="stat-value">0</div>
+            <div class="stat-label">Total Aguardando</div>
+          </div>
+          <div class="stat-card">
+            <div id="statFilaPreferencial" class="stat-value" style="color: #f87171;">0</div>
+            <div class="stat-label">Fila Preferencial</div>
+          </div>
+          <div class="stat-card">
+            <div id="statFilaConvencional" class="stat-value" style="color: #60a5fa;">0</div>
+            <div class="stat-label">Fila Convencional</div>
+          </div>
+        </div>
+
+        <div class="queue-table-card">
+          <div class="card-title">
+            <span>📋 FILA EM ESPERA (ORDENADA POR PRIORIDADE)</span>
+          </div>
+
+          <table class="queue-table">
+            <thead>
+              <tr>
+                <th>POS.</th>
+                <th>SENHA</th>
+                <th>TIPO</th>
+                <th>ESPERA</th>
+              </tr>
+            </thead>
+            <tbody id="queueTableBody">
+              <tr>
+                <td colspan="4" style="text-align: center; color: var(--text-muted);">Carregando fila de espera...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/atendente.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+@startuml Diagrama_Casos_de_Uso_SSE
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Atendente (Guichê)" as Atendente
+actor "Tela Pública (TV)" as TV
+actor "Cliente (Smartphone/Totem)" as Cliente
+
+rectangle "Sistema de Atendimento SSE" {
+    usecase "Emitir Nova Senha\n[RF-03]" as UC_Emitir
+    usecase "Chamar Próxima Senha\n[RF-04]" as UC_Chamar
+    usecase "Receber Evento SSE\n[RF-01]" as UC_ReceberSSE
+    usecase "Exibir Alerta Visual\n[RF-06]" as UC_Alerta Visual
+    usecase "Consultar Histórico\n[RF-07]" as UC_Historico
+    usecase "Reconectar Auto\n[RF-08]" as UC_Reconectar
+}
+
+Atendente --> UC_Emitir
+Atendente --> UC_Chamar
+
+TV --> UC_ReceberSSE
+TV --> UC_AlertaVisual
+TV --> UC_Historico
+
+Cliente --> UC_Emitir
+Cliente --> UC_Reconectar
+
+UC_Chamar .> UC_ReceberSSE : <<trigger>>
+UC_ReceberSSE .> UC_AlertaVisual : <<include>>
+@enduml

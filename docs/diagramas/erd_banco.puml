@@ -1,0 +1,56 @@
+@startuml Diagrama_ERD_Banco_SSE
+entity "CATEGORIA_SENHA" {
+  * id_categoria : INT <<PK>>
+  --
+  codigo_prefixo : VARCHAR(5)
+  nome_categoria : VARCHAR(50)
+  nivel_prioridade : INT
+  descricao : TEXT
+  ativo : BOOLEAN
+}
+
+entity "GUICHE" {
+  * id_guiche : INT <<PK>>
+  --
+  numero_guiche : INT
+  nome_atendente : VARCHAR(100)
+  status_operacional : VARCHAR(20)
+  data_ultimo_acesso : TIMESTAMP
+}
+
+entity "SENHA" {
+  * id_senha : INT <<PK>>
+  --
+  id_categoria : INT <<FK>>
+  numero_sequencial : INT
+  codigo_senha : VARCHAR(10)
+  status_senha : VARCHAR(20)
+  data_hora_emissao : TIMESTAMP
+}
+
+entity "ATENDIMENTO" {
+  * id_atendimento : INT <<PK>>
+  --
+  id_senha : INT <<FK>>
+  id_guiche : INT <<FK>>
+  data_hora_chamada : TIMESTAMP
+  data_hora_inicio : TIMESTAMP
+  data_hora_fim : TIMESTAMP
+  tempo_espera_segundos : INT
+  duracao_atendimento_segundos : INT
+}
+
+entity "PAINEL_MONITOR" {
+  * id_painel : INT <<PK>>
+  --
+  identificador_sala : VARCHAR(50)
+  ip_dispositivo : VARCHAR(45)
+  tipo_exibicao : VARCHAR(30)
+  status_conexao_sse : BOOLEAN
+  ultima_sincronizacao : TIMESTAMP
+}
+
+CATEGORIA_SENHA ||--o{ SENHA : "classifica"
+SENHA ||--o| ATENDIMENTO : "gera"
+GUICHE ||--o{ ATENDIMENTO : "atende"
+@enduml

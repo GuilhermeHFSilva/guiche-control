@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Totem Autoatendimento - SSE Queue Control</title>
+  <link rel="stylesheet" href="/css/global.css">
+  <link rel="stylesheet" href="/css/totem.css">
+</head>
+<body>
+
+  <div class="totem-wrapper">
+    <div class="totem-card">
+      <header class="totem-header">
+        <h1 class="totem-title">RETIRADA DE SENHA</h1>
+        <p class="totem-subtitle">Toque na tela para selecionar o tipo de atendimento desejado</p>
+      </header>
+
+      <div class="totem-options">
+        <button id="btnPreferencial" class="btn-totem-option btn-totem-pref">
+          <div class="option-icon">♿</div>
+          <div class="option-content">
+            <h3>ATENDIMENTO PREFERENCIAL</h3>
+            <p>Idosos (60+), Gestantes, Lactantes e PCD</p>
+          </div>
+        </button>
+
+        <button id="btnConvencional" class="btn-totem-option btn-totem-conv">
+          <div class="option-icon">👤</div>
+          <div class="option-content">
+            <h3>ATENDIMENTO CONVENCIONAL</h3>
+            <p>Consultas gerais e atendimento presencial</p>
+          </div>
+        </button>
+
+        <button id="btnExames" class="btn-totem-option btn-totem-exam">
+          <div class="option-icon">📄</div>
+          <div class="option-content">
+            <h3>ENTREGA DE EXAMES</h3>
+            <p>Retirada rápida de laudos e resultados</p>
+          </div>
+        </button>
+      </div>
+
+      <div style="font-size: 0.85rem; color: var(--text-muted);">
+        Terminal 01 — Impressora Térmica: <span style="color: var(--accent-green);">● Pronta</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Simulação da Impressão de Bilhete Térmico -->
+  <div id="ticketModalOverlay" class="ticket-modal-overlay">
+    <div class="thermal-ticket">
+      <div class="ticket-header-title">CLÍNICA SANTA MARIA</div>
+      <div>COMPROVANTE DE SENHA</div>
+      
+      <div id="modalSenhaCode" class="ticket-code-big">P-015</div>
+      
+      <div class="ticket-info-line">Categoria: <strong id="modalCategoriaName">Atendimento Preferencial</strong></div>
+      <div class="ticket-info-line">Posição: <strong id="modalPosicaoFila">2º na fila</strong></div>
+      <div class="ticket-info-line">Data/Hora: <span id="modalHoraEmissao">14:35:00</span></div>
+
+      <div class="ticket-footer-msg">
+        <p>Aguarde a chamada da sua senha no painel principal da TV.</p>
+        <div id="modalTimerText" style="margin-top: 8px; font-weight: bold; color: #059669;">
+          Retornando à tela inicial em 5s...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/totem.js"></script>
+</body>
+</html>

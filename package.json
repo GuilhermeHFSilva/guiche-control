@@ -1,0 +1,25 @@
+{
+  "name": "sse-queue-flow",
+  "version": "1.0.0",
+  "description": "Sistema de gestão de filas e atendimento presencial com Server-Sent Events (SSE) e Express",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": [
+    "sse",
+    "server-sent-events",
+    "express",
+    "queue",
+    "atendimento",
+    "realtime"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}

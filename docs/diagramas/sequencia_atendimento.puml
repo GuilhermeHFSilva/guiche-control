@@ -1,0 +1,25 @@
+@startuml Diagrama_Sequencia_Atendimento
+autonumber
+actor "Atendente (Client)" as Client
+participant "Servidor Express (API)" as API
+participant "EventStream Engine" as SSE
+actor "Tela Pública (TV)" as TV
+
+Client -> API : POST /api/atendimento/proximo {guicheId: 3}
+activate API
+
+API -> API : Atualiza Fila & Estado Global
+API -> SSE : Trigger Broadcast Event
+activate SSE
+
+SSE -> TV : SSE EventStream (event: SENHA_CHAMADA)
+activate TV
+TV -> TV : Exibe Banner Alerta Visual & Toca Som (5s)
+deactivate TV
+
+SSE --> API : Broadcast Concluído
+deactivate SSE
+
+API --> Client : HTTP 200 OK {sucesso: true, senhaChamada: "P-015"}
+deactivate API
+@enduml

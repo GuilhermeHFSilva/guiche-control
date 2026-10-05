@@ -1,153 +1,147 @@
+/**
+ * @fileoverview Lógica do Painel da TV da Sala de Espera (Smart TV).
+ * Escuta eventos SSE em tempo real, executa flash visual, sintetiza sinal sonoro
+ * e atualiza o histórico de chamadas recentes.
+ */
+
 document.addEventListener('DOMContentLoaded', () => {
-  const currentTicketCode = document.getElementById('currentTicketCode');
-  const currentGuicheDisplay = document.getElementById('currentGuicheDisplay');
-  const tvCallBanner = document.getElementById('tvCallBanner');
-  const historyListContainer = document.getElementById('historyListContainer');
-  const tvClock = document.getElementById('tvClock');
-  const audioChime = document.getElementById('audioChime');
+  const elements = {
+    currentTicketCode: document.getElementById('currentTicketCode'),
+    currentGuicheDisplay: document.getElementById('currentGuicheDisplay'),
+    tvCallBanner: document.getElementById('tvCallBanner'),
+    historyListContainer: document.getElementById('historyListContainer'),
+    tvClock: document.getElementById('tvClock'),
+    audioChime: document.getElementById('audioChime')
+  };
 
   let audioCtx = null;
   let eventSource = null;
 
-  // Sintetizador Web Audio API para tocar o alarme sonoro (chime / gong) de chamada
-  function playSyntheticChime() {
-    try {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  /**
+   * Inicializa com segurança o contexto do Web Audio API mediante interação ou evento.
+   */
+  function getAudioContext() {
+    if (!audioCtx) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        audioCtx = new AudioContextClass();
       }
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
+    }
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    return audioCtx;
+  }
 
-      // Se existir o elemento <audio> de chime e ele carregar com sucesso, toca ele
-      if (audioChime && audioChime.readyState >= 2) {
-        audioChime.currentTime = 0;
-        audioChime.play().catch(() => playBeepNotes());
+  /**
+   * Toca o chime sonoro de chamada (arquivo mp3 ou sintetizador Web Audio API).
+   */
+  function playCallAlert() {
+    try {
+      if (elements.audioChime && elements.audioChime.readyState >= 2) {
+        elements.audioChime.currentTime = 0;
+        elements.audioChime.play().catch(() => playSyntheticChime());
         return;
       }
-      playBeepNotes();
+      playSyntheticChime();
     } catch (e) {
-      console.warn('Web Audio API chime fallback:', e);
+      console.warn('Alerta sonoro:', e);
     }
   }
 
-  function playBeepNotes() {
-    if (!audioCtx) return;
-    const now = audioCtx.currentTime;
+  /**
+   * Sintetiza acordes sonoros elegantes (G5 e C6) via Web Audio API.
+   */
+  function playSyntheticChime() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
 
-    // Nota 1: G5 (783.99 Hz)
-    const osc1 = audioCtx.createOscillator();
-    const gain1 = audioCtx.createGain();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(783.99, now);
-    gain1.gain.setValueAtTime(0.3, now);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-    osc1.connect(gain1);
-    gain1.connect(audioCtx.destination);
-    osc1.start(now);
-    osc1.stop(now + 0.6);
-
-    // Nota 2: C6 (1046.50 Hz) - 150ms depois
-    const osc2 = audioCtx.createOscillator();
-    const gain2 = audioCtx.createGain();
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(1046.50, now + 0.15);
-    gain2.gain.setValueAtTime(0.4, now + 0.15);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-    osc2.connect(gain2);
-    gain2.connect(audioCtx.destination);
-    osc2.start(now + 0.15);
-    osc2.stop(now + 1.2);
+    const now = ctx.currentTime;
+    playTone(ctx, 783.99, now, 0.6, 0.3); // Sol (G5)
+    playTone(ctx, 1046.50, now + 0.15, 1.0, 0.4); // Dó (C6)
   }
 
-  // Permite ativar áudio no primeiro clique na TV (política de Autoplay dos navegadores)
-  document.body.addEventListener('click', () => {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-  }, { once: true });
+  /**
+   * Helper para emissão de oscilador senoidal puro.
+   */
+  function playTone(ctx, frequency, startTime, duration, volume) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
 
-  // Atualizador de Relógio Digital
-  function updateClock() {
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const mins = String(now.getMinutes()).padStart(2, '0');
-    const secs = String(now.getSeconds()).padStart(2, '0');
-    if (tvClock) {
-      tvClock.textContent = `${hours}:${mins}:${secs}`;
-    }
-  }
-  setInterval(updateClock, 1000);
-  updateClock();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(frequency, startTime);
 
-  // Conexão SSE
-  function initSSE() {
-    if (eventSource) eventSource.close();
+    gain.gain.setValueAtTime(volume, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
 
-    eventSource = new EventSource('/api/atendimento/stream?tipo=publico');
+    osc.connect(gain);
+    gain.connect(ctx.destination);
 
-    eventSource.onopen = () => {
-      console.log('📡 [TV SSE] Conectado ao feed de chamadas da sala de espera.');
-    };
-
-    const handleCall = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        console.log('🔔 [TV Chamada Recebida]', data);
-
-        // Atualiza a tela principal com destaque gigante
-        if (currentTicketCode) currentTicketCode.textContent = data.senha;
-        if (currentGuicheDisplay) currentGuicheDisplay.textContent = `GUICHÊ ${String(data.guiche).padStart(2, '0')}`;
-
-        // Executa animação de flash verde no banner (RF-06)
-        if (tvCallBanner) {
-          tvCallBanner.classList.remove('flash-call');
-          void tvCallBanner.offsetWidth; // Force reflow
-          tvCallBanner.classList.add('flash-call');
-        }
-
-        // Reproduz o alarme sonoro (RF-06)
-        playSyntheticChime();
-
-        // Atualiza o painel de histórico (RF-07)
-        if (data.historico) {
-          renderHistorico(data.historico);
-        } else {
-          carregarHistorico();
-        }
-      } catch (err) {
-        console.error('Erro ao processar evento de chamada:', err);
-      }
-    };
-
-    eventSource.addEventListener('SENHA_CHAMADA', handleCall);
-    eventSource.addEventListener('CALL_TICKET', handleCall);
-
-    eventSource.onerror = (err) => {
-      console.warn('⚠️ Conexão SSE da TV oscilou. EventSource reconectando automaticamente...');
-    };
+    osc.start(startTime);
+    osc.stop(startTime + duration);
   }
 
-  async function carregarHistorico() {
+  /**
+   * Anuncia a senha por voz sintetizada se a API estiver disponível no navegador.
+   */
+  function speakTicket(senha, guicheNumero) {
+    if (!('speechSynthesis' in window)) return;
     try {
-      const res = await fetch('/api/senhas/status');
-      const data = await res.json();
-      if (data.sucesso && data.ultimasChamadas) {
-        renderHistorico(data.ultimasChamadas);
-      }
-    } catch (err) {
-      console.error('Erro ao carregar histórico inicial:', err);
+      window.speechSynthesis.cancel();
+      const text = `Senha ${senha.split('').join(' ')}, Guichê ${guicheNumero}`;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'pt-BR';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      // Fala sintética é opcional/progressiva
     }
   }
 
-  function renderHistorico(historico) {
-    if (!historyListContainer) return;
-    if (!historico || historico.length === 0) {
-      historyListContainer.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 20px;">Nenhuma chamada recente.</div>`;
+  /**
+   * Atualiza o relógio digital no cabeçalho a cada segundo.
+   */
+  function startClock() {
+    const update = () => {
+      if (!elements.tvClock) return;
+      const now = new Date();
+      elements.tvClock.textContent = now.toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+    };
+    update();
+    setInterval(update, 1000);
+  }
+
+  /**
+   * Dispara a animação visual de destaque no banner de chamada.
+   */
+  function triggerVisualCallAlert() {
+    if (!elements.tvCallBanner) return;
+    elements.tvCallBanner.classList.remove('flash-call');
+    void elements.tvCallBanner.offsetWidth; // Força reflow para reiniciar animação CSS
+    elements.tvCallBanner.classList.add('flash-call');
+  }
+
+  /**
+   * Renderiza a lista de últimas senhas chamadas.
+   * @param {Array<object>} historico
+   */
+  function renderHistory(historico = []) {
+    if (!elements.historyListContainer) return;
+
+    if (!Array.isArray(historico) || historico.length === 0) {
+      elements.historyListContainer.innerHTML = `
+        <div style="color: var(--text-muted); text-align: center; padding: 20px;">
+          Nenhuma chamada recente.
+        </div>
+      `;
       return;
     }
 
-    historyListContainer.innerHTML = historico.slice(0, 4).map(item => `
+    elements.historyListContainer.innerHTML = historico.slice(0, 4).map(item => `
       <div class="history-item">
         <span class="history-item-code">${item.senha}</span>
         <span class="history-item-guiche">Guichê ${String(item.guiche).padStart(2, '0')}</span>
@@ -156,7 +150,72 @@ document.addEventListener('DOMContentLoaded', () => {
     `).join('');
   }
 
+  /**
+   * Carrega o histórico inicial de chamadas via REST.
+   */
+  async function loadInitialHistory() {
+    try {
+      const res = await fetch('/api/senhas/status');
+      const data = await res.json();
+      if (data.sucesso && data.ultimasChamadas) {
+        renderHistory(data.ultimasChamadas);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar histórico inicial da TV:', err);
+    }
+  }
+
+  /**
+   * Conecta ao stream de eventos SSE.
+   */
+  function initSSE() {
+    if (eventSource) eventSource.close();
+
+    eventSource = new EventSource('/api/atendimento/stream?tipo=publico');
+
+    eventSource.onopen = () => {
+      console.log('📡 [TV SSE] Conectado ao feed em tempo real da sala de espera.');
+    };
+
+    const handleCallEvent = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        console.log('🔔 [TV Chamada Recebida]:', data);
+
+        if (elements.currentTicketCode) elements.currentTicketCode.textContent = data.senha;
+        if (elements.currentGuicheDisplay) {
+          elements.currentGuicheDisplay.innerHTML = `<span>🚪</span> GUICHÊ ${String(data.guiche).padStart(2, '0')}`;
+        }
+
+        triggerVisualCallAlert();
+        playCallAlert();
+
+        // Opcional: fala sintética após o chime (espera 600ms)
+        setTimeout(() => speakTicket(data.senha, data.guiche), 600);
+
+        if (Array.isArray(data.historico)) {
+          renderHistory(data.historico);
+        } else {
+          loadInitialHistory();
+        }
+      } catch (err) {
+        console.error('Erro ao processar evento de chamada na TV:', err);
+      }
+    };
+
+    eventSource.addEventListener('SENHA_CHAMADA', handleCallEvent);
+    eventSource.addEventListener('CALL_TICKET', handleCallEvent);
+
+    eventSource.onerror = () => {
+      console.warn('⚠️ Conexão SSE da TV oscilou. Reconectando...');
+    };
+  }
+
+  // Ativa áudio no primeiro clique na página (política de autoplay do browser)
+  document.body.addEventListener('click', () => getAudioContext(), { once: true });
+
   // Inicialização
-  carregarHistorico();
+  startClock();
+  loadInitialHistory();
   initSSE();
 });

@@ -1,86 +1,121 @@
-const filaService = require('../services/fila.service');
-const guicheRepository = require('../repositories/guiche.repository');
-const atendimentoService = require('../services/atendimento.service');
+/**
+ * @fileoverview Controlador para ações e consultas relacionadas aos guichês de atendimento.
+ */
+const defaultFilaService = require('../services/fila.service');
+const defaultGuicheRepo = require('../repositories/guiche.repository');
+const defaultAtendimentoService = require('../services/atendimento.service');
+const { NotFoundError } = require('../errors');
 
 class GuicheController {
-  proximo(req, res) {
+  constructor({
+    filaService = defaultFilaService,
+    guicheRepo = defaultGuicheRepo,
+    atendimentoService = defaultAtendimentoService
+  } = {}) {
+    this.filaService = filaService;
+    this.guicheRepo = guicheRepo;
+    this.atendimentoService = atendimentoService;
+
+    this.proximo = this.proximo.bind(this);
+    this.rechamar = this.rechamar.bind(this);
+    this.ausente = this.ausente.bind(this);
+    this.finalizar = this.finalizar.bind(this);
+    this.listarGuiches = this.listarGuiches.bind(this);
+    this.obterGuiche = this.obterGuiche.bind(this);
+  }
+
+  /**
+   * Chama a próxima senha com prioridade legal para o guichê.
+   */
+  proximo(req, res, next) {
     try {
-      const { guicheId = 1, guiche = 1, atendenteId = 'ATD-104' } = req.body;
-      const numGuiche = guicheId || guiche;
-
-      const resultado = filaService.chamarProximaSenha({
-        guicheId: Number(numGuiche),
-        atendenteId
-      });
-
+      const guicheId = this._extrairGuicheId(req.body);
+      const atendenteId = req.body?.atendenteId || `ATD-10${guicheId}`;
+      const resultado = this.filaService.chamarProximaSenha({ guicheId, atendenteId });
       return res.status(200).json(resultado);
     } catch (error) {
-      console.error('❌ Erro ao chamar próxima senha:', error);
-      return res.status(500).json({ sucesso: false, mensagem: error.message || 'Erro ao chamar senha.' });
+      return next(error);
     }
   }
 
-  rechamar(req, res) {
+  /**
+   * Re-anuncia a senha atual no painel público.
+   */
+  rechamar(req, res, next) {
     try {
-      const { guicheId = 1, guiche = 1 } = req.body;
-      const numGuiche = guicheId || guiche;
-
-      const resultado = filaService.rechamarSenha({ guicheId: Number(numGuiche) });
+      const guicheId = this._extrairGuicheId(req.body);
+      const resultado = this.filaService.rechamarSenha({ guicheId });
       return res.status(200).json(resultado);
     } catch (error) {
-      console.error('❌ Erro ao rechamar senha:', error);
-      return res.status(500).json({ sucesso: false, mensagem: error.message || 'Erro ao rechamar.' });
+      return next(error);
     }
   }
 
-  ausente(req, res) {
+  /**
+   * Marca o cliente atual como ausente e libera o guichê.
+   */
+  ausente(req, res, next) {
     try {
-      const { guicheId = 1, guiche = 1 } = req.body;
-      const numGuiche = guicheId || guiche;
-
-      const resultado = filaService.marcarAusente({ guicheId: Number(numGuiche) });
+      const guicheId = this._extrairGuicheId(req.body);
+      const resultado = this.filaService.marcarAusente({ guicheId });
       return res.status(200).json(resultado);
     } catch (error) {
-      console.error('❌ Erro ao marcar ausente:', error);
-      return res.status(500).json({ sucesso: false, mensagem: error.message || 'Erro ao cancelar por ausência.' });
+      return next(error);
     }
   }
 
-  finalizar(req, res) {
+  /**
+   * Conclui o atendimento atual no guichê.
+   */
+  finalizar(req, res, next) {
     try {
-      const { guicheId = 1, guiche = 1 } = req.body;
-      const numGuiche = guicheId || guiche;
-
-      const resultado = filaService.finalizarAtendimento({ guicheId: Number(numGuiche) });
+      const guicheId = this._extrairGuicheId(req.body);
+      const resultado = this.filaService.finalizarAtendimento({ guicheId });
       return res.status(200).json(resultado);
     } catch (error) {
-      console.error('❌ Erro ao finalizar atendimento:', error);
-      return res.status(500).json({ sucesso: false, mensagem: error.message || 'Erro ao finalizar atendimento.' });
+      return next(error);
     }
   }
 
-  listarGuiches(req, res) {
+  /**
+   * Lista todos os guichês operacionais cadastrados.
+   */
+  listarGuiches(req, res, next) {
     try {
-      const guiches = guicheRepository.findAll();
+      const guiches = this.guicheRepo.findAll();
       return res.status(200).json({ sucesso: true, guiches });
     } catch (error) {
-      console.error('❌ Erro ao listar guichês:', error);
-      return res.status(500).json({ sucesso: false, mensagem: 'Erro ao listar guichês.' });
+      return next(error);
     }
   }
 
-  obterGuiche(req, res) {
+  /**
+   * Consulta os dados de um guichê específico por ID ou número.
+   */
+  obterGuiche(req, res, next) {
     try {
       const { id } = req.params;
-      const guicheInfo = atendimentoService.getGuicheInfo(Number(id));
+      const guicheInfo = this.atendimentoService.getGuicheInfo(Number(id));
+
       if (!guicheInfo) {
-        return res.status(404).json({ sucesso: false, mensagem: 'Guichê não encontrado.' });
+        throw new NotFoundError(`Guichê ${id} não encontrado.`);
       }
+
       return res.status(200).json({ sucesso: true, guiche: guicheInfo });
     } catch (error) {
-      return res.status(500).json({ sucesso: false, mensagem: error.message });
+      return next(error);
     }
+  }
+
+  /**
+   * Extrai o identificador numérico do guichê a partir do corpo da requisição.
+   * @private
+   */
+  _extrairGuicheId(body = {}) {
+    const rawId = body.guicheId ?? body.guiche ?? 1;
+    return Number(rawId);
   }
 }
 
 module.exports = new GuicheController();
+module.exports.GuicheController = GuicheController;

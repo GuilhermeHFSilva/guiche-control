@@ -1,35 +1,44 @@
-document.addEventListener('DOMContentLoaded', () => {
-  const guicheSelect = document.getElementById('guicheSelect');
-  const btnChamarProximo = document.getElementById('btnChamarProximo');
-  const btnRechamar = document.getElementById('btnRechamar');
-  const btnAusente = document.getElementById('btnAusente');
-  const btnFinalizar = document.getElementById('btnFinalizar');
-  const senhaAtualDisplay = document.getElementById('senhaAtualDisplay');
-  const statusSseBadge = document.getElementById('statusSseBadge');
-  
-  // Elements for Statistics
-  const statTotalAguardando = document.getElementById('statTotalAguardando');
-  const statFilaPreferencial = document.getElementById('statFilaPreferencial');
-  const statFilaConvencional = document.getElementById('statFilaConvencional');
-  const queueTableBody = document.getElementById('queueTableBody');
+/**
+ * @fileoverview Lógica do Painel do Atendente (Guichê).
+ * Gerencia chamadas, rechamadas, ausências e sincronização em tempo real via SSE.
+ */
 
-  let currentGuicheId = parseInt(guicheSelect.value, 10);
+document.addEventListener('DOMContentLoaded', () => {
+  // Elementos do DOM
+  const elements = {
+    guicheSelect: document.getElementById('guicheSelect'),
+    operatorName: document.getElementById('operatorName'),
+    statusSseBadge: document.getElementById('statusSseBadge'),
+    senhaAtualDisplay: document.getElementById('senhaAtualDisplay'),
+    btnChamarProximo: document.getElementById('btnChamarProximo'),
+    btnRechamar: document.getElementById('btnRechamar'),
+    btnAusente: document.getElementById('btnAusente'),
+    btnFinalizar: document.getElementById('btnFinalizar'),
+    statTotalAguardando: document.getElementById('statTotalAguardando'),
+    statFilaPreferencial: document.getElementById('statFilaPreferencial'),
+    statFilaConvencional: document.getElementById('statFilaConvencional'),
+    queueTableBody: document.getElementById('queueTableBody')
+  };
+
+  let currentGuicheId = Number.parseInt(elements.guicheSelect.value, 10);
   let eventSource = null;
 
-  // Atualiza guichê selecionado
-  guicheSelect.addEventListener('change', (e) => {
-    currentGuicheId = parseInt(e.target.value, 10);
-    carregarDadosGuiche();
-  });
-
-  function atualizarBadgeStatus(status, text) {
-    statusSseBadge.className = `status-badge ${status}`;
-    statusSseBadge.innerHTML = `<span class="status-dot"></span> ${text}`;
+  /**
+   * Atualiza o badge indicador de status da conexão SSE.
+   * @param {string} status - Classe de status ('reconnecting' | 'disconnected' | '')
+   * @param {string} text - Texto descritivo
+   */
+  function setStatusBadge(status, text) {
+    if (!elements.statusSseBadge) return;
+    elements.statusSseBadge.className = `status-badge ${status}`.trim();
+    elements.statusSseBadge.innerHTML = `<span class="status-dot"></span> ${text}`;
   }
 
-  // Conexão EventSource (SSE) com resiliência e reconexão automática (RF-08)
+  /**
+   * Inicializa o canal Server-Sent Events (SSE) com reconexão automática.
+   */
   function initSSE() {
-    atualizarBadgeStatus('reconnecting', 'Reconectando...');
+    setStatusBadge('reconnecting', 'Reconectando...');
 
     if (eventSource) {
       eventSource.close();
@@ -38,17 +47,17 @@ document.addEventListener('DOMContentLoaded', () => {
     eventSource = new EventSource(`/api/atendimento/stream?tipo=atendente&guiche=${currentGuicheId}`);
 
     eventSource.onopen = () => {
-      atualizarBadgeStatus('', '[SSE OK]');
+      setStatusBadge('', '[SSE OK]');
     };
 
-    eventSource.addEventListener('CONNECTED', (e) => {
-      atualizarBadgeStatus('', '[SSE Conectado]');
+    eventSource.addEventListener('CONNECTED', () => {
+      setStatusBadge('', '[SSE Conectado]');
     });
 
     eventSource.addEventListener('QUEUE_UPDATE', (e) => {
       try {
         const data = JSON.parse(e.data);
-        atualizarEstatisticas(data);
+        renderStatistics(data);
       } catch (err) {
         console.error('Erro ao processar QUEUE_UPDATE:', err);
       }
@@ -58,62 +67,95 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const data = JSON.parse(e.data);
         if (data.guiche === currentGuicheId) {
-          senhaAtualDisplay.textContent = data.senha;
-          senhaAtualDisplay.classList.add('flash-call');
-          setTimeout(() => senhaAtualDisplay.classList.remove('flash-call'), 2000);
+          highlightCurrentTicket(data.senha);
         }
-        carregarStatusFila();
+        loadQueueStatus();
       } catch (err) {
         console.error('Erro ao processar SENHA_CHAMADA:', err);
       }
     });
 
-    eventSource.onerror = (err) => {
+    eventSource.onerror = () => {
       console.warn('⚠️ Conexão SSE oscilou. Tentando reconectar...');
-      atualizarBadgeStatus('disconnected', '[Reconectando...]');
+      setStatusBadge('disconnected', '[Reconectando...]');
     };
   }
 
-  function atualizarEstatisticas(data) {
-    if (statTotalAguardando) statTotalAguardando.textContent = data.totalAguardando ?? 0;
-    if (statFilaPreferencial) statFilaPreferencial.textContent = data.filaPreferencial ?? 0;
-    if (statFilaConvencional) statFilaConvencional.textContent = data.filaConvencional ?? 0;
+  /**
+   * Destaca visualmente a senha chamada no painel.
+   * @param {string} ticketCode
+   */
+  function highlightCurrentTicket(ticketCode) {
+    if (!elements.senhaAtualDisplay) return;
+    elements.senhaAtualDisplay.textContent = ticketCode;
+    elements.senhaAtualDisplay.classList.add('flash-call');
+    setTimeout(() => elements.senhaAtualDisplay.classList.remove('flash-call'), 2000);
   }
 
-  async function carregarStatusFila() {
+  /**
+   * Atualiza os cartões de estatísticas da fila.
+   * @param {object} stats
+   */
+  function renderStatistics(stats = {}) {
+    if (elements.statTotalAguardando) elements.statTotalAguardando.textContent = stats.totalAguardando ?? 0;
+    if (elements.statFilaPreferencial) elements.statFilaPreferencial.textContent = stats.filaPreferencial ?? 0;
+    if (elements.statFilaConvencional) elements.statFilaConvencional.textContent = stats.filaConvencional ?? 0;
+  }
+
+  /**
+   * Busca e atualiza a listagem de senhas pendentes na fila.
+   */
+  async function loadQueueStatus() {
     try {
       const res = await fetch('/api/senhas/status');
       const data = await res.json();
       if (data.sucesso) {
-        atualizarEstatisticas(data.stats);
-        renderizarTabelaFila(data.pendentes);
+        renderStatistics(data.stats);
+        renderQueueTable(data.pendentes);
       }
     } catch (err) {
       console.error('Erro ao carregar status da fila:', err);
     }
   }
 
-  async function carregarDadosGuiche() {
+  /**
+   * Carrega os dados operacionais do guichê selecionado.
+   */
+  async function loadGuicheData() {
     try {
       const res = await fetch(`/api/guiches/${currentGuicheId}`);
       const data = await res.json();
-      if (data.sucesso && data.guiche && data.guiche.ultimoAtendimento) {
-        senhaAtualDisplay.textContent = data.guiche.ultimoAtendimento.codigo_senha;
+
+      if (data.sucesso && data.guiche) {
+        const { guiche } = data;
+        if (elements.operatorName) {
+          elements.operatorName.textContent = `${guiche.nome_atendente || 'Operador'} (Guichê ${guiche.numero_guiche})`;
+        }
+        if (elements.senhaAtualDisplay) {
+          elements.senhaAtualDisplay.textContent = guiche.ultimoAtendimento?.codigo_senha || '---';
+        }
       }
     } catch (err) {
-      console.error('Erro ao carregar guichê:', err);
+      console.error('Erro ao carregar dados do guichê:', err);
     }
-    carregarStatusFila();
+    loadQueueStatus();
   }
 
-  function renderizarTabelaFila(pendentes) {
-    if (!queueTableBody) return;
-    if (!pendentes || pendentes.length === 0) {
-      queueTableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Nenhuma senha aguardando na fila.</td></tr>`;
+  /**
+   * Renderiza a tabela com as senhas em espera ordenadas por prioridade.
+   * @param {Array<object>} pendentes
+   */
+  function renderQueueTable(pendentes) {
+    if (!elements.queueTableBody) return;
+
+    if (!Array.isArray(pendentes) || pendentes.length === 0) {
+      elements.queueTableBody.innerHTML = `
+        <tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Nenhuma senha aguardando na fila.</td></tr>
+      `;
       return;
     }
 
-    queueTableBody.innerHTML = pendentes.map((item, index) => {
+    elements.queueTableBody.innerHTML = pendentes.map((item, index) => {
       const tagClass = item.codigo_prefixo === 'P' ? 'tag-p' : (item.codigo_prefixo === 'E' ? 'tag-e' : 'tag-c');
       return `
         <tr>
@@ -126,72 +168,80 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
   }
 
-  // Ações de Botões
-  btnChamarProximo.addEventListener('click', async () => {
-    btnChamarProximo.disabled = true;
+  /**
+   * Helper para envio de requisições de ação para a API.
+   * @param {string} endpoint
+   * @param {object} payload
+   */
+  async function sendAction(endpoint, payload) {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return res.json();
+  }
+
+  // --- Handlers de Ações dos Botões ---
+
+  elements.guicheSelect.addEventListener('change', (e) => {
+    currentGuicheId = Number.parseInt(e.target.value, 10);
+    loadGuicheData();
+    initSSE();
+  });
+
+  elements.btnChamarProximo.addEventListener('click', async () => {
+    elements.btnChamarProximo.disabled = true;
     try {
-      const res = await fetch('/api/atendimento/proximo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guicheId: currentGuicheId, atendenteId: `ATD-10${currentGuicheId}` })
+      const data = await sendAction('/api/atendimento/proximo', {
+        guicheId: currentGuicheId,
+        atendenteId: `ATD-10${currentGuicheId}`
       });
-      const data = await res.json();
 
       if (data.sucesso) {
-        senhaAtualDisplay.textContent = data.senhaChamada;
+        highlightCurrentTicket(data.senhaChamada);
       } else {
         alert(data.mensagem || 'Não há senhas pendentes na fila.');
       }
     } catch (err) {
       console.error('Erro ao chamar próximo:', err);
     } finally {
-      btnChamarProximo.disabled = false;
+      elements.btnChamarProximo.disabled = false;
     }
   });
 
-  btnRechamar.addEventListener('click', async () => {
+  elements.btnRechamar.addEventListener('click', async () => {
     try {
-      const res = await fetch('/api/atendimento/rechamar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guicheId: currentGuicheId })
-      });
-      const data = await res.json();
+      const data = await sendAction('/api/atendimento/rechamar', { guicheId: currentGuicheId });
       if (!data.sucesso) alert(data.mensagem);
     } catch (err) {
       console.error('Erro ao rechamar:', err);
     }
   });
 
-  btnAusente.addEventListener('click', async () => {
+  elements.btnAusente.addEventListener('click', async () => {
     if (!confirm('Deseja marcar a senha atual como cliente ausente?')) return;
     try {
-      const res = await fetch('/api/atendimento/ausente', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guicheId: currentGuicheId })
-      });
-      const data = await res.json();
+      const data = await sendAction('/api/atendimento/ausente', { guicheId: currentGuicheId });
       if (data.sucesso) {
-        senhaAtualDisplay.textContent = '---';
-        carregarStatusFila();
+        elements.senhaAtualDisplay.textContent = '---';
+        loadQueueStatus();
+      } else {
+        alert(data.mensagem);
       }
     } catch (err) {
       console.error('Erro ao marcar ausente:', err);
     }
   });
 
-  btnFinalizar.addEventListener('click', async () => {
+  elements.btnFinalizar.addEventListener('click', async () => {
     try {
-      const res = await fetch('/api/atendimento/finalizar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guicheId: currentGuicheId })
-      });
-      const data = await res.json();
+      const data = await sendAction('/api/atendimento/finalizar', { guicheId: currentGuicheId });
       if (data.sucesso) {
-        senhaAtualDisplay.textContent = '---';
-        carregarStatusFila();
+        elements.senhaAtualDisplay.textContent = '---';
+        loadQueueStatus();
+      } else {
+        alert(data.mensagem);
       }
     } catch (err) {
       console.error('Erro ao finalizar atendimento:', err);
@@ -199,6 +249,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Inicialização
-  carregarDadosGuiche();
+  loadGuicheData();
   initSSE();
 });

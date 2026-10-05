@@ -1,23 +1,37 @@
+/**
+ * @fileoverview Serviço para gerenciamento de conexões Server-Sent Events (SSE).
+ * Fornece push em tempo real unidirecional, heartbeat com unref para evitar vazamento
+ * no event loop do Node, e broadcast resiliente para navegadores e painéis.
+ */
+const { SSE_EVENTS } = require('../constants');
+
 class SSEService {
   constructor() {
+    /** @type {Set<object>} */
     this.clients = new Set();
     this.nextClientId = 1;
-    this.initHeartbeat();
+    this.heartbeatInterval = null;
+    this.startHeartbeat();
   }
 
+  /**
+   * Registra um novo cliente SSE mantendo o canal HTTP aberto.
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   * @param {object} [metadata={}]
+   */
   addClient(req, res, metadata = {}) {
     const clientId = this.nextClientId++;
 
-    // Configura os cabeçalhos HTTP para manter o canal SSE aberto
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no', // Desabilita buffering no NGINX se houver proxy
+      'X-Accel-Buffering': 'no',
       'Access-Control-Allow-Origin': '*'
     });
 
-    // Envia o comentário inicial de confirmação de conexão
+    // Envia comentário inicial para abrir imediatamente o fluxo no cliente
     res.write(`: SSE Connection Established (Client ID: ${clientId})\n\n`);
 
     const client = {
@@ -30,66 +44,139 @@ class SSEService {
     };
 
     this.clients.add(client);
-    console.log(`📡 [SSE] Novo cliente conectado: ID ${client.id} (Tipo: ${client.tipo}, Guichê: ${client.guiche || 'N/A'}). Total ativos: ${this.clients.size}`);
 
-    // Envia evento de boas-vindas / sincronização inicial
-    this.sendToClient(client, 'CONNECTED', {
+    const cleanup = () => {
+      if (this.clients.has(client)) {
+        this.clients.delete(client);
+      }
+    };
+
+    req.on('close', cleanup);
+    res.on('error', cleanup);
+
+    // Notificação inicial de conexão confirmada
+    this.sendToClient(client, SSE_EVENTS.CONNECTED, {
       clientId: client.id,
       tipo: client.tipo,
       serverTime: new Date().toISOString()
     });
 
-    req.on('close', () => {
-      this.clients.delete(client);
-      console.log(`🔌 [SSE] Cliente desconectado: ID ${client.id}. Total ativos: ${this.clients.size}`);
-    });
+    return client;
   }
 
+  /**
+   * Envia uma mensagem formatada segundo a especificação W3C SSE para um cliente específico.
+   * @param {object} client
+   * @param {string} eventName
+   * @param {any} data
+   */
   sendToClient(client, eventName, data) {
     try {
       const payload = typeof data === 'string' ? data : JSON.stringify(data);
       client.res.write(`event: ${eventName}\n`);
       client.res.write(`data: ${payload}\n\n`);
-    } catch (err) {
-      console.error(`❌ [SSE] Erro ao enviar mensagem para cliente ID ${client.id}:`, err.message);
-      this.clients.delete(client);
+    } catch {
+      this.removeClient(client);
     }
   }
 
+  /**
+   * Remove o cliente e encerra o socket de forma segura.
+   * @param {object} client
+   */
+  removeClient(client) {
+    if (this.clients.has(client)) {
+      this.clients.delete(client);
+      try {
+        client.res.end();
+      } catch {
+        // Ignora erros ao fechar socket já destruído
+      }
+    }
+  }
+
+  /**
+   * Transmite um evento SSE para todos os clientes conectados.
+   * @param {string} eventName
+   * @param {any} data
+   */
   broadcast(eventName, data) {
     const payload = typeof data === 'string' ? data : JSON.stringify(data);
-    let count = 0;
+    const deadClients = [];
 
     for (const client of this.clients) {
       try {
         client.res.write(`event: ${eventName}\n`);
         client.res.write(`data: ${payload}\n\n`);
-        count++;
-      } catch (err) {
-        console.error(`❌ [SSE] Falha no broadcast para cliente ID ${client.id}:`, err.message);
-        this.clients.delete(client);
+      } catch {
+        deadClients.push(client);
       }
     }
 
-    console.log(`📢 [SSE Broadcast] Evento '${eventName}' enviado para ${count} cliente(s).`);
+    for (const dead of deadClients) {
+      this.removeClient(dead);
+    }
   }
 
-  initHeartbeat() {
-    // Heartbeat a cada 20s para manter as conexões ativas e prevenir timeouts de firewall/proxy
-    setInterval(() => {
+  /**
+   * Inicia o timer de heartbeat (ping) com .unref() para não prender o event loop.
+   * @param {number} [intervalMs=20000]
+   */
+  startHeartbeat(intervalMs = 20000) {
+    if (this.heartbeatInterval) return;
+
+    this.heartbeatInterval = setInterval(() => {
+      const deadClients = [];
+      const ping = `: heartbeat ${new Date().toISOString()}\n\n`;
+
       for (const client of this.clients) {
         try {
-          client.res.write(`: heartbeat ${new Date().toISOString()}\n\n`);
-        } catch (err) {
-          this.clients.delete(client);
+          client.res.write(ping);
+        } catch {
+          deadClients.push(client);
         }
       }
-    }, 20000);
+
+      for (const dead of deadClients) {
+        this.removeClient(dead);
+      }
+    }, intervalMs);
+
+    // Fundamental para testes unitários e encerramento limpo do processo Node
+    if (this.heartbeatInterval.unref) {
+      this.heartbeatInterval.unref();
+    }
   }
 
+  /**
+   * Interrompe o heartbeat se estiver ativo.
+   */
+  stopHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  /**
+   * Encerra todas as conexões abertas (útil para graceful shutdown e testes).
+   */
+  closeAll() {
+    this.stopHeartbeat();
+    for (const client of Array.from(this.clients)) {
+      this.removeClient(client);
+    }
+    this.clients.clear();
+  }
+
+  /**
+   * Retorna a quantidade de clientes ativos no momento.
+   * @returns {number}
+   */
   getActiveClientsCount() {
     return this.clients.size;
   }
 }
 
 module.exports = new SSEService();
+module.exports.SSEService = SSEService;

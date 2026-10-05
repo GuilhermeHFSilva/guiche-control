@@ -1,18 +1,39 @@
+/**
+ * @fileoverview Lógica do Totem de Autoatendimento touch-screen.
+ * Gerencia a emissão de senhas por categoria e a exibição do bilhete térmico simulado.
+ */
+
 document.addEventListener('DOMContentLoaded', () => {
-  const btnPreferencial = document.getElementById('btnPreferencial');
-  const btnConvencional = document.getElementById('btnConvencional');
-  const btnExames = document.getElementById('btnExames');
-  const ticketModalOverlay = document.getElementById('ticketModalOverlay');
-  const modalSenhaCode = document.getElementById('modalSenhaCode');
-  const modalCategoriaName = document.getElementById('modalCategoriaName');
-  const modalPosicaoFila = document.getElementById('modalPosicaoFila');
-  const modalHoraEmissao = document.getElementById('modalHoraEmissao');
-  const modalTimerText = document.getElementById('modalTimerText');
+  const elements = {
+    btnPreferencial: document.getElementById('btnPreferencial'),
+    btnConvencional: document.getElementById('btnConvencional'),
+    btnExames: document.getElementById('btnExames'),
+    ticketModalOverlay: document.getElementById('ticketModalOverlay'),
+    modalSenhaCode: document.getElementById('modalSenhaCode'),
+    modalCategoriaName: document.getElementById('modalCategoriaName'),
+    modalPosicaoFila: document.getElementById('modalPosicaoFila'),
+    modalHoraEmissao: document.getElementById('modalHoraEmissao'),
+    modalTimerText: document.getElementById('modalTimerText')
+  };
 
   let modalTimerInterval = null;
 
+  /**
+   * Habilita ou desabilita os botões para evitar emissões duplicadas por toque acidental.
+   * @param {boolean} disabled
+   */
+  function setButtonsDisabled(disabled) {
+    if (elements.btnPreferencial) elements.btnPreferencial.disabled = disabled;
+    if (elements.btnConvencional) elements.btnConvencional.disabled = disabled;
+    if (elements.btnExames) elements.btnExames.disabled = disabled;
+  }
+
+  /**
+   * Dispara a emissão de senha no backend para a categoria selecionada.
+   * @param {string} categoria
+   */
   async function emitirSenha(categoria) {
-    disableButtons(true);
+    setButtonsDisabled(true);
     try {
       const res = await fetch('/api/senhas/emissao', {
         method: 'POST',
@@ -26,59 +47,73 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
 
       if (data.sucesso) {
-        exibirModalComprovante(data);
+        exibirComprovante(data);
       } else {
-        alert(data.mensagem || 'Erro ao gerar senha. Tente novamente.');
+        alert(data.mensagem || 'Não foi possível gerar a senha. Tente novamente.');
       }
     } catch (err) {
       console.error('Erro na emissão de senha:', err);
       alert('Falha na comunicação com o servidor de atendimento.');
     } finally {
-      disableButtons(false);
+      setButtonsDisabled(false);
     }
   }
 
-  function disableButtons(disabled) {
-    if (btnPreferencial) btnPreferencial.disabled = disabled;
-    if (btnConvencional) btnConvencional.disabled = disabled;
-    if (btnExames) btnExames.disabled = disabled;
+  /**
+   * Fecha o modal de comprovante e limpa os timers.
+   */
+  function fecharModal() {
+    if (modalTimerInterval) {
+      clearInterval(modalTimerInterval);
+      modalTimerInterval = null;
+    }
+    if (elements.ticketModalOverlay) {
+      elements.ticketModalOverlay.classList.remove('active');
+    }
   }
 
-  function exibirModalComprovante(data) {
-    if (modalSenhaCode) modalSenhaCode.textContent = data.senhaEmitida;
-    if (modalCategoriaName) modalCategoriaName.textContent = data.categoria;
-    if (modalPosicaoFila) modalPosicaoFila.textContent = `${data.posicaoFila}º na fila`;
-    if (modalHoraEmissao) modalHoraEmissao.textContent = data.horaEmissao || new Date().toLocaleTimeString();
+  /**
+   * Exibe o modal com visual de bilhete impresso e inicia temporizador de retorno.
+   * @param {object} ticketData
+   */
+  function exibirComprovante(ticketData) {
+    if (elements.modalSenhaCode) elements.modalSenhaCode.textContent = ticketData.senhaEmitida;
+    if (elements.modalCategoriaName) elements.modalCategoriaName.textContent = ticketData.categoria;
+    if (elements.modalPosicaoFila) elements.modalPosicaoFila.textContent = `${ticketData.posicaoFila}º na fila`;
+    if (elements.modalHoraEmissao) {
+      elements.modalHoraEmissao.textContent = ticketData.horaEmissao || new Date().toLocaleTimeString('pt-BR');
+    }
 
-    if (ticketModalOverlay) {
-      ticketModalOverlay.classList.add('active');
+    if (elements.ticketModalOverlay) {
+      elements.ticketModalOverlay.classList.add('active');
     }
 
     let countdown = 5;
-    if (modalTimerText) modalTimerText.textContent = `Retornando à tela inicial em ${countdown}s...`;
+    if (elements.modalTimerText) {
+      elements.modalTimerText.textContent = `Retornando à tela inicial em ${countdown}s...`;
+    }
 
-    if (modalTimerInterval) clearInterval(modalTimerInterval);
+    if (modalTimerInterval) {
+      clearInterval(modalTimerInterval);
+    }
 
     modalTimerInterval = setInterval(() => {
       countdown--;
-      if (modalTimerText) modalTimerText.textContent = `Retornando à tela inicial em ${countdown}s...`;
+      if (elements.modalTimerText) {
+        elements.modalTimerText.textContent = `Retornando à tela inicial em ${countdown}s...`;
+      }
 
       if (countdown <= 0) {
-        clearInterval(modalTimerInterval);
-        if (ticketModalOverlay) ticketModalOverlay.classList.remove('active');
+        fecharModal();
       }
     }, 1000);
   }
 
-  if (btnPreferencial) btnPreferencial.addEventListener('click', () => emitirSenha('PREFERENCIAL'));
-  if (btnConvencional) btnConvencional.addEventListener('click', () => emitirSenha('CONVENCIONAL'));
-  if (btnExames) btnExames.addEventListener('click', () => emitirSenha('EXAMES'));
+  // Listeners de seleção de categoria
+  elements.btnPreferencial?.addEventListener('click', () => emitirSenha('PREFERENCIAL'));
+  elements.btnConvencional?.addEventListener('click', () => emitirSenha('CONVENCIONAL'));
+  elements.btnExames?.addEventListener('click', () => emitirSenha('EXAMES'));
 
-  // Fechar modal ao clicar fora ou na tela
-  if (ticketModalOverlay) {
-    ticketModalOverlay.addEventListener('click', () => {
-      if (modalTimerInterval) clearInterval(modalTimerInterval);
-      ticketModalOverlay.classList.remove('active');
-    });
-  }
+  // Fechar comprovante ao clicar sobre o overlay
+  elements.ticketModalOverlay?.addEventListener('click', fecharModal);
 });

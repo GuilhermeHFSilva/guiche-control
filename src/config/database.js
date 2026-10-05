@@ -1,38 +1,72 @@
+/**
+ * @fileoverview Conexão e inicialização do banco de dados SQLite via node:sqlite.
+ */
 const { DatabaseSync } = require('node:sqlite');
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 const env = require('./env');
 
-// Garante que o diretório do banco exista
-const dbDir = path.dirname(env.DB_PATH);
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
-}
+const SCHEMA_PATH = path.resolve(__dirname, '../../database/schema.sql');
+const SEEDS_PATH = path.resolve(__dirname, '../../database/seeds.sql');
 
-const db = new DatabaseSync(env.DB_PATH);
-
-// Executa Pragmas para otimização do SQLite em memória/arquivo
-db.exec('PRAGMA foreign_keys = ON;');
-db.exec('PRAGMA journal_mode = WAL;');
-
-function initDatabase() {
-  const schemaPath = path.resolve(__dirname, '../../database/schema.sql');
-  const seedsPath = path.resolve(__dirname, '../../database/seeds.sql');
-
-  if (fs.existsSync(schemaPath)) {
-    const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-    db.exec(schemaSql);
+/**
+ * Cria e configura uma nova instância de banco de dados SQLite.
+ * @param {string} [databasePath=env.DB_PATH] Caminho do arquivo ou ':memory:'
+ * @returns {DatabaseSync}
+ */
+function createDatabase(databasePath = env.DB_PATH) {
+  if (databasePath !== ':memory:') {
+    const dbDir = path.dirname(databasePath);
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
   }
 
-  if (fs.existsSync(seedsPath)) {
-    const seedsSql = fs.readFileSync(seedsPath, 'utf8');
-    db.exec(seedsSql);
+  const dbInstance = new DatabaseSync(databasePath);
+
+  dbInstance.exec('PRAGMA foreign_keys = ON;');
+  if (databasePath !== ':memory:') {
+    dbInstance.exec('PRAGMA journal_mode = WAL;');
   }
 
-  console.log(' [DB] Banco de dados SQLite inicializado com sucesso.');
+  initDatabase(dbInstance);
+  return dbInstance;
 }
 
-// Inicializa no startup
-initDatabase();
+/**
+ * Executa scripts DDL e seeds iniciais se existirem.
+ * @param {DatabaseSync} dbInstance
+ */
+function initDatabase(dbInstance) {
+  if (fs.existsSync(SCHEMA_PATH)) {
+    const schemaSql = fs.readFileSync(SCHEMA_PATH, 'utf8');
+    dbInstance.exec(schemaSql);
+  }
 
-module.exports = db;
+  if (fs.existsSync(SEEDS_PATH)) {
+    const seedsSql = fs.readFileSync(SEEDS_PATH, 'utf8');
+    dbInstance.exec(seedsSql);
+  }
+
+  if (!env.isTest && !process.env.NODE_TEST_CONTEXT && dbInstance.path !== ':memory:') {
+    console.log('📦 [DB] Banco de dados SQLite inicializado com sucesso.');
+  }
+}
+
+/**
+ * Fecha a conexão de forma segura.
+ * @param {DatabaseSync} [dbInstance]
+ */
+function closeDatabase(dbInstance = defaultDb) {
+  if (dbInstance && typeof dbInstance.close === 'function') {
+    dbInstance.close();
+  }
+}
+
+// Instância singleton padrão para o ciclo de vida da aplicação
+const defaultDb = createDatabase();
+
+module.exports = defaultDb;
+module.exports.createDatabase = createDatabase;
+module.exports.initDatabase = initDatabase;
+module.exports.closeDatabase = closeDatabase;

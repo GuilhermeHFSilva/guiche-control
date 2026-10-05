@@ -1,15 +1,20 @@
+/**
+ * @fileoverview Rotas para emissão e status das senhas.
+ */
 const express = require('express');
-const router = express.Router();
 const senhaController = require('../controllers/senha.controller');
+const guicheController = require('../controllers/guiche.controller');
+
+const router = express.Router();
 
 // Emissão de senhas no totem
-router.post('/emissao', (req, res) => senhaController.emissao(req, res));
-router.post('/gerar', (req, res) => senhaController.emissao(req, res)); // Alias do PDF
+router.post('/emissao', senhaController.emissao);
+router.post('/gerar', senhaController.emissao);
 
-// Chamada de senhas (alias para rota de atendimento)
-router.post('/chamar', (req, res) => require('../controllers/guiche.controller').proximo(req, res));
+// Chamada de senhas (alias para operação de próximo)
+router.post('/chamar', guicheController.proximo);
 
 // Status geral da fila
-router.get('/status', (req, res) => senhaController.listarStatusFila(req, res));
+router.get('/status', senhaController.listarStatusFila);
 
 module.exports = router;

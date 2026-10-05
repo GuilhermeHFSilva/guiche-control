@@ -1,65 +1,102 @@
-const senhaRepository = require('../repositories/senha.repository');
-const categoriaRepository = require('../repositories/categoria.repository');
-const guicheRepository = require('../repositories/guiche.repository');
-const atendimentoRepository = require('../repositories/atendimento.repository');
-const sseService = require('./sse.service');
+/**
+ * @fileoverview Regras de negócio para emissão, fila, chamadas e finalização de senhas.
+ * Aplica os princípios de Clean Code (funções pequenas, SRP, nomes expressivos e atomicidade).
+ */
+const defaultSenhaRepo = require('../repositories/senha.repository');
+const defaultCategoriaRepo = require('../repositories/categoria.repository');
+const defaultGuicheRepo = require('../repositories/guiche.repository');
+const defaultAtendimentoRepo = require('../repositories/atendimento.repository');
+const defaultSseService = require('./sse.service');
+const { CATEGORIAS, STATUS_SENHA, STATUS_GUICHE, SSE_EVENTS } = require('../constants');
+const { NotFoundError, BadRequestError } = require('../errors');
 
 class FilaService {
-  gerarSenha({ categoria = 'CONVENCIONAL', totemId = 'TOTEM-01' }) {
-    let catObj = null;
+  constructor({
+    senhaRepo = defaultSenhaRepo,
+    categoriaRepo = defaultCategoriaRepo,
+    guicheRepo = defaultGuicheRepo,
+    atendimentoRepo = defaultAtendimentoRepo,
+    sseService = defaultSseService
+  } = {}) {
+    this.senhaRepo = senhaRepo;
+    this.categoriaRepo = categoriaRepo;
+    this.guicheRepo = guicheRepo;
+    this.atendimentoRepo = atendimentoRepo;
+    this.sseService = sseService;
+  }
 
-    if (categoria.length === 1) {
-      catObj = categoriaRepository.findByPrefix(categoria.toUpperCase());
-    } else if (categoria.toUpperCase().includes('PREFERENCIAL')) {
-      catObj = categoriaRepository.findByPrefix('P');
-    } else if (categoria.toUpperCase().includes('EXAME')) {
-      catObj = categoriaRepository.findByPrefix('E');
-    } else {
-      catObj = categoriaRepository.findByPrefix('C');
+  /**
+   * Resolve a categoria a partir do código ou nome informado.
+   * @param {string} [categoriaIdentificador='CONVENCIONAL']
+   * @returns {object}
+   */
+  resolverCategoria(categoriaIdentificador = 'CONVENCIONAL') {
+    const termo = String(categoriaIdentificador).trim().toUpperCase();
+
+    if (termo.length === 1) {
+      const encontrada = this.categoriaRepo.findByPrefix(termo);
+      if (encontrada) return encontrada;
     }
 
-    if (!catObj) {
-      catObj = categoriaRepository.findByPrefix('C') || { id_categoria: 2, codigo_prefixo: 'C', nome_categoria: 'Atendimento Convencional' };
+    if (termo.includes('PREF')) {
+      return this.categoriaRepo.findByPrefix(CATEGORIAS.PREFERENCIAL.prefixo) || CATEGORIAS.PREFERENCIAL;
+    }
+    if (termo.includes('EXAM')) {
+      return this.categoriaRepo.findByPrefix(CATEGORIAS.EXAMES.prefixo) || CATEGORIAS.EXAMES;
     }
 
-    const proximoNum = senhaRepository.getProximoNumeroSequencial(catObj.id_categoria);
-    const codigoSenha = `${catObj.codigo_prefixo}-${String(proximoNum).padStart(3, '0')}`;
+    return this.categoriaRepo.findByPrefix(CATEGORIAS.CONVENCIONAL.prefixo) || CATEGORIAS.CONVENCIONAL;
+  }
 
-    const novaSenha = senhaRepository.create({
-      id_categoria: catObj.id_categoria,
+  /**
+   * Emite uma nova senha no totem e atualiza painéis via SSE.
+   * @param {{ categoria?: string, totemId?: string }} params
+   * @returns {object}
+   */
+  gerarSenha({ categoria = 'CONVENCIONAL', totemId = 'TOTEM-01' } = {}) {
+    const cat = this.resolverCategoria(categoria);
+    const idCategoria = cat.id_categoria || cat.id;
+    const prefixo = cat.codigo_prefixo || cat.prefixo;
+    const nomeCategoria = cat.nome_categoria || cat.nome;
+
+    const proximoNum = this.senhaRepo.getProximoNumeroSequencial(idCategoria);
+    const codigoSenha = `${prefixo}-${String(proximoNum).padStart(3, '0')}`;
+
+    const novaSenha = this.senhaRepo.create({
+      id_categoria: idCategoria,
       numero_sequencial: proximoNum,
       codigo_senha: codigoSenha
     });
 
-    const posicaoFila = senhaRepository.getPosicaoFila(novaSenha.id_senha, catObj.id_categoria);
-    const queueStats = senhaRepository.getQueueStats();
+    const posicaoFila = this.senhaRepo.getPosicaoFila(novaSenha.id_senha, idCategoria);
+    this._notificarAtualizacaoFila();
 
-    // Notifica todas as telas conectadas via SSE sobre a atualização da fila
-    sseService.broadcast('QUEUE_UPDATE', {
-      tipo: 'QUEUE_UPDATE',
-      ...queueStats
+    const horaEmissao = new Date().toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
     });
-
-    const horaEmissao = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     return {
       sucesso: true,
       senhaEmitida: codigoSenha,
-      categoria: catObj.nome_categoria,
+      categoria: nomeCategoria,
       posicaoFila,
       horaEmissao,
+      totemOrigem: totemId,
       mensagem: 'Aguarde o chamado no painel principal.'
     };
   }
 
+  /**
+   * Chama a próxima senha com prioridade legal (Preferencial > Convencional > Exames).
+   * @param {{ guicheId: number, atendenteId?: string }} params
+   * @returns {object}
+   */
   chamarProximaSenha({ guicheId, atendenteId = 'ATD-100' }) {
-    const guiche = guicheRepository.findByNumero(guicheId) || guicheRepository.findById(guicheId);
-    if (!guiche) {
-      throw new Error(`Guichê ${guicheId} não foi encontrado no sistema.`);
-    }
+    const guiche = this._obterGuicheValido(guicheId);
+    const proximaSenha = this._obterProximaSenhaDisponivel();
 
-    // Busca a próxima senha pendente com prioridade legal (Preferencial > Convencional > Exames)
-    const proximaSenha = senhaRepository.findNextPendingTicket();
     if (!proximaSenha) {
       return {
         sucesso: false,
@@ -67,40 +104,31 @@ class FilaService {
       };
     }
 
-    // Atualiza o status da senha para EM_ATENDIMENTO
-    senhaRepository.updateStatus(proximaSenha.id_senha, 'EM_ATENDIMENTO');
-
     // Registra a sessão de atendimento
-    const atendimento = atendimentoRepository.create({
+    this.atendimentoRepo.create({
       id_senha: proximaSenha.id_senha,
       id_guiche: guiche.id_guiche
     });
 
-    // Atualiza o operador e status do guichê
-    const nomeAtendente = atendenteId.startsWith('ATD-') ? `Atendente ${atendenteId}` : atendenteId;
-    guicheRepository.updateOperador(guiche.id_guiche, nomeAtendente, 'EM_ATENDIMENTO');
+    const nomeAtendente = this._formatarNomeAtendente(atendenteId, guiche.nome_atendente);
+    this.guicheRepo.updateOperador(guiche.id_guiche, nomeAtendente, STATUS_GUICHE.EM_ATENDIMENTO);
 
-    const queueStats = senhaRepository.getQueueStats();
-    const ultimasChamadas = senhaRepository.getUltimasChamadas(5);
-    const atendimentosHoje = atendimentoRepository.countAtendimentosHojePorGuiche(guiche.id_guiche);
+    const queueStats = this.senhaRepo.getQueueStats();
+    const ultimasChamadas = this.senhaRepo.getUltimasChamadas(5);
+    const atendimentosHoje = this.atendimentoRepo.countAtendimentosHojePorGuiche(guiche.id_guiche);
 
-    const payloadSSE = {
-      tipo: 'SENHA_CHAMADA',
-      senha: proximaSenha.codigo_senha,
-      guiche: guiche.numero_guiche,
+    const payload = this._criarPayloadChamada({
+      codigoSenha: proximaSenha.codigo_senha,
+      numeroGuiche: guiche.numero_guiche,
       nomeAtendente,
-      timestamp: new Date().toISOString(),
-      pessoasAguardando: queueStats.totalAguardando,
+      totalAguardando: queueStats.totalAguardando,
       historico: ultimasChamadas
-    };
+    });
 
-    // Broadcast do evento SSE de chamada de senha (alias: CALL_TICKET e SENHA_CHAMADA)
-    sseService.broadcast('SENHA_CHAMADA', payloadSSE);
-    sseService.broadcast('CALL_TICKET', payloadSSE);
-
-    // Broadcast de atualização da contagem de fila
-    sseService.broadcast('QUEUE_UPDATE', {
-      tipo: 'QUEUE_UPDATE',
+    this.sseService.broadcast(SSE_EVENTS.SENHA_CHAMADA, payload);
+    this.sseService.broadcast(SSE_EVENTS.CALL_TICKET, payload);
+    this.sseService.broadcast(SSE_EVENTS.QUEUE_UPDATE, {
+      tipo: SSE_EVENTS.QUEUE_UPDATE,
       ...queueStats
     });
 
@@ -112,33 +140,36 @@ class FilaService {
     };
   }
 
+  /**
+   * Reanuncia a última senha chamada no guichê.
+   * @param {{ guicheId: number }} params
+   * @returns {object}
+   */
   rechamarSenha({ guicheId }) {
-    const guiche = guicheRepository.findByNumero(guicheId) || guicheRepository.findById(guicheId);
-    if (!guiche) {
-      throw new Error(`Guichê ${guicheId} não foi encontrado no sistema.`);
-    }
+    const guiche = this._obterGuicheValido(guicheId);
+    const ultimoAtendimento = this.atendimentoRepo.findUltimoAtendimentoPorGuiche(guiche.id_guiche);
 
-    const ultimoAtendimento = atendimentoRepository.findUltimoAtendimentoPorGuiche(guiche.id_guiche);
     if (!ultimoAtendimento) {
-      return { sucesso: false, mensagem: 'Nenhum atendimento anterior encontrado para este guichê.' };
+      return {
+        sucesso: false,
+        mensagem: 'Nenhum atendimento anterior encontrado para este guichê.'
+      };
     }
 
-    const queueStats = senhaRepository.getQueueStats();
-    const ultimasChamadas = senhaRepository.getUltimasChamadas(5);
+    const queueStats = this.senhaRepo.getQueueStats();
+    const ultimasChamadas = this.senhaRepo.getUltimasChamadas(5);
 
-    const payloadSSE = {
-      tipo: 'SENHA_CHAMADA',
-      senha: ultimoAtendimento.codigo_senha,
-      guiche: guiche.numero_guiche,
+    const payload = this._criarPayloadChamada({
+      codigoSenha: ultimoAtendimento.codigo_senha,
+      numeroGuiche: guiche.numero_guiche,
       nomeAtendente: guiche.nome_atendente || `Guichê ${guiche.numero_guiche}`,
-      timestamp: new Date().toISOString(),
-      pessoasAguardando: queueStats.totalAguardando,
+      totalAguardando: queueStats.totalAguardando,
       historico: ultimasChamadas,
       isRechamada: true
-    };
+    });
 
-    sseService.broadcast('SENHA_CHAMADA', payloadSSE);
-    sseService.broadcast('CALL_TICKET', payloadSSE);
+    this.sseService.broadcast(SSE_EVENTS.SENHA_CHAMADA, payload);
+    this.sseService.broadcast(SSE_EVENTS.CALL_TICKET, payload);
 
     return {
       sucesso: true,
@@ -147,45 +178,113 @@ class FilaService {
     };
   }
 
+  /**
+   * Marca o atendimento atual como cancelado por ausência do cliente.
+   * @param {{ guicheId: number }} params
+   * @returns {object}
+   */
   marcarAusente({ guicheId }) {
-    const guiche = guicheRepository.findByNumero(guicheId) || guicheRepository.findById(guicheId);
-    if (!guiche) throw new Error(`Guichê ${guicheId} não foi encontrado.`);
+    const guiche = this._obterGuicheValido(guicheId);
+    const ultimoAtendimento = this.atendimentoRepo.findUltimoAtendimentoPorGuiche(guiche.id_guiche);
 
-    const ultimoAtendimento = atendimentoRepository.findUltimoAtendimentoPorGuiche(guiche.id_guiche);
-    if (!ultimoAtendimento) {
-      return { sucesso: false, mensagem: 'Nenhum atendimento em andamento para marcar ausente.' };
+    if (!ultimoAtendimento || ultimoAtendimento.status_senha !== STATUS_SENHA.EM_ATENDIMENTO) {
+      return {
+        sucesso: false,
+        mensagem: 'Nenhum atendimento em andamento para marcar ausente.'
+      };
     }
 
-    senhaRepository.updateStatus(ultimoAtendimento.id_senha, 'CANCELADO_AUSENCIA');
-    guicheRepository.updateStatus(guiche.id_guiche, 'DISPONIVEL');
-
-    const queueStats = senhaRepository.getQueueStats();
-    sseService.broadcast('QUEUE_UPDATE', { tipo: 'QUEUE_UPDATE', ...queueStats });
+    this.senhaRepo.updateStatus(ultimoAtendimento.id_senha, STATUS_SENHA.CANCELADO_AUSENCIA);
+    this.guicheRepo.updateStatus(guiche.id_guiche, STATUS_GUICHE.DISPONIVEL);
+    this._notificarAtualizacaoFila();
 
     return {
       sucesso: true,
-      mensagem: `Senha ${ultimoAtendimento.codigo_senha} marcada como CANCELADO_AUSENCIA.`
+      mensagem: `Senha ${ultimoAtendimento.codigo_senha} marcada como ${STATUS_SENHA.CANCELADO_AUSENCIA}.`
     };
   }
 
+  /**
+   * Conclui com sucesso a sessão de atendimento do guichê.
+   * @param {{ guicheId: number }} params
+   * @returns {object}
+   */
   finalizarAtendimento({ guicheId }) {
-    const guiche = guicheRepository.findByNumero(guicheId) || guicheRepository.findById(guicheId);
-    if (!guiche) throw new Error(`Guichê ${guicheId} não foi encontrado.`);
+    const guiche = this._obterGuicheValido(guicheId);
+    const ultimoAtendimento = this.atendimentoRepo.findUltimoAtendimentoPorGuiche(guiche.id_guiche);
 
-    const ultimoAtendimento = atendimentoRepository.findUltimoAtendimentoPorGuiche(guiche.id_guiche);
-    if (!ultimoAtendimento) {
-      return { sucesso: false, mensagem: 'Nenhum atendimento para finalizar.' };
+    if (!ultimoAtendimento || ultimoAtendimento.status_senha !== STATUS_SENHA.EM_ATENDIMENTO) {
+      return {
+        sucesso: false,
+        mensagem: 'Nenhum atendimento para finalizar.'
+      };
     }
 
-    atendimentoRepository.finalizarAtendimento(ultimoAtendimento.id_atendimento);
-    senhaRepository.updateStatus(ultimoAtendimento.id_senha, 'FINALIZADA');
-    guicheRepository.updateStatus(guiche.id_guiche, 'DISPONIVEL');
+    this.atendimentoRepo.finalizarAtendimento(ultimoAtendimento.id_atendimento);
+    this.senhaRepo.updateStatus(ultimoAtendimento.id_senha, STATUS_SENHA.FINALIZADA);
+    this.guicheRepo.updateStatus(guiche.id_guiche, STATUS_GUICHE.DISPONIVEL);
+    this._notificarAtualizacaoFila();
 
     return {
       sucesso: true,
       mensagem: `Atendimento da senha ${ultimoAtendimento.codigo_senha} finalizado com sucesso.`
     };
   }
+
+  // Métodos auxiliares privados para manter funções pequenas e foco único (Clean Code)
+
+  _obterGuicheValido(identificadorGuiche) {
+    if (!identificadorGuiche) {
+      throw new BadRequestError('Identificador do guichê é obrigatório.');
+    }
+    const guiche = this.guicheRepo.findByNumero(identificadorGuiche) || this.guicheRepo.findById(identificadorGuiche);
+    if (!guiche) {
+      throw new NotFoundError(`Guichê ${identificadorGuiche} não foi encontrado no sistema.`);
+    }
+    return guiche;
+  }
+
+  _obterProximaSenhaDisponivel() {
+    let proxima = this.senhaRepo.findNextPendingTicket();
+    while (proxima) {
+      const reservado = this.senhaRepo.claimTicketAtomic(proxima.id_senha);
+      if (reservado) {
+        return proxima;
+      }
+      proxima = this.senhaRepo.findNextPendingTicket();
+    }
+    return null;
+  }
+
+  _formatarNomeAtendente(atendenteId, nomePadrao) {
+    if (nomePadrao && nomePadrao !== 'DISPONIVEL') return nomePadrao;
+    if (typeof atendenteId === 'string' && atendenteId.startsWith('ATD-')) {
+      return `Atendente ${atendenteId}`;
+    }
+    return atendenteId || 'Atendente';
+  }
+
+  _criarPayloadChamada({ codigoSenha, numeroGuiche, nomeAtendente, totalAguardando, historico, isRechamada = false }) {
+    return {
+      tipo: SSE_EVENTS.SENHA_CHAMADA,
+      senha: codigoSenha,
+      guiche: numeroGuiche,
+      nomeAtendente,
+      timestamp: new Date().toISOString(),
+      pessoasAguardando: totalAguardando,
+      historico,
+      isRechamada
+    };
+  }
+
+  _notificarAtualizacaoFila() {
+    const queueStats = this.senhaRepo.getQueueStats();
+    this.sseService.broadcast(SSE_EVENTS.QUEUE_UPDATE, {
+      tipo: SSE_EVENTS.QUEUE_UPDATE,
+      ...queueStats
+    });
+  }
 }
 
 module.exports = new FilaService();
+module.exports.FilaService = FilaService;

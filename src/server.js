@@ -1,20 +1,49 @@
+/**
+ * @fileoverview Ponto de entrada do servidor HTTP com suporte a graceful shutdown.
+ */
 const app = require('./app');
 const env = require('./config/env');
+const sseService = require('./services/sse.service');
+const { closeDatabase } = require('./config/database');
 
-const PORT = env.PORT || 3000;
-
-app.listen(PORT, () => {
+const server = app.listen(env.PORT, () => {
   console.log(`
   ================================================================
   🚀 SERVER-SENT EVENTS (SSE) QUEUE MANAGEMENT RUNNING
   ================================================================
-  🔊 Server Running on: http://localhost:${PORT}
+  🔊 Servidor Ativo em: http://localhost:${env.PORT}
   
-  📱 Tela 1 - Painel do Atendente : http://localhost:${PORT}/tela1-atendente.html
-  📺 Tela 2 - Painel Público (TV) : http://localhost:${PORT}/tela2-tv.html
-  🎫 Tela 3 - Totem Autoatendimento : http://localhost:${PORT}/tela3-totem.html
+  📱 Tela 1 - Painel do Atendente : http://localhost:${env.PORT}/tela1-atendente.html
+  📺 Tela 2 - Painel Público (TV) : http://localhost:${env.PORT}/tela2-tv.html
+  🎫 Tela 3 - Totem Autoatendimento : http://localhost:${env.PORT}/tela3-totem.html
   
-  📡 SSE Endpoint Feed          : http://localhost:${PORT}/api/atendimento/stream
+  📡 SSE Endpoint Feed          : http://localhost:${env.PORT}/api/atendimento/stream
   ================================================================
   `);
 });
+
+/**
+ * Encerramento gracioso do servidor em caso de interrupção (SIGTERM/SIGINT).
+ */
+function gracefulShutdown(signal) {
+  console.log(`\n🛑 Sinal ${signal} recebido. Encerrando conexões graciosamente...`);
+
+  sseService.closeAll();
+
+  server.close(() => {
+    console.log('🚪 Servidor HTTP encerrado.');
+    closeDatabase();
+    process.exit(0);
+  });
+
+  // Força encerramento após 5 segundos se houver travamento
+  setTimeout(() => {
+    console.error('⚠️ Forçando encerramento imediato.');
+    process.exit(1);
+  }, 5000).unref();
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+module.exports = server;

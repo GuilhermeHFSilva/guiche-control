@@ -1,9 +1,3 @@
-/**
- * @fileoverview Lógica do Painel da TV da Sala de Espera (Smart TV).
- * Escuta eventos SSE em tempo real, executa flash visual, sintetiza sinal sonoro
- * e atualiza o histórico de chamadas recentes.
- */
-
 document.addEventListener('DOMContentLoaded', () => {
   const elements = {
     currentTicketCode: document.getElementById('currentTicketCode'),
@@ -17,9 +11,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let audioCtx = null;
   let eventSource = null;
 
-  /**
-   * Inicializa com segurança o contexto do Web Audio API mediante interação ou evento.
-   */
   function getAudioContext() {
     if (!audioCtx) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -33,9 +24,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return audioCtx;
   }
 
-  /**
-   * Toca o chime sonoro de chamada (arquivo mp3 ou sintetizador Web Audio API).
-   */
   function playCallAlert() {
     try {
       if (elements.audioChime && elements.audioChime.readyState >= 2) {
@@ -49,21 +37,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /**
-   * Sintetiza acordes sonoros elegantes (G5 e C6) via Web Audio API.
-   */
   function playSyntheticChime() {
     const ctx = getAudioContext();
     if (!ctx) return;
 
     const now = ctx.currentTime;
-    playTone(ctx, 783.99, now, 0.6, 0.3); // Sol (G5)
-    playTone(ctx, 1046.50, now + 0.15, 1.0, 0.4); // Dó (C6)
+    playTone(ctx, 783.99, now, 0.6, 0.3);
+    playTone(ctx, 1046.50, now + 0.15, 1.0, 0.4);
   }
 
-  /**
-   * Helper para emissão de oscilador senoidal puro.
-   */
   function playTone(ctx, frequency, startTime, duration, volume) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -81,9 +63,6 @@ document.addEventListener('DOMContentLoaded', () => {
     osc.stop(startTime + duration);
   }
 
-  /**
-   * Anuncia a senha por voz sintetizada se a API estiver disponível no navegador.
-   */
   function speakTicket(senha, guicheNumero) {
     if (!('speechSynthesis' in window)) return;
     try {
@@ -94,13 +73,9 @@ document.addEventListener('DOMContentLoaded', () => {
       utterance.rate = 0.9;
       window.speechSynthesis.speak(utterance);
     } catch {
-      // Fala sintética é opcional/progressiva
     }
   }
 
-  /**
-   * Atualiza o relógio digital no cabeçalho a cada segundo.
-   */
   function startClock() {
     const update = () => {
       if (!elements.tvClock) return;
@@ -115,20 +90,13 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(update, 1000);
   }
 
-  /**
-   * Dispara a animação visual de destaque no banner de chamada.
-   */
   function triggerVisualCallAlert() {
     if (!elements.tvCallBanner) return;
     elements.tvCallBanner.classList.remove('flash-call');
-    void elements.tvCallBanner.offsetWidth; // Força reflow para reiniciar animação CSS
+    void elements.tvCallBanner.offsetWidth;
     elements.tvCallBanner.classList.add('flash-call');
   }
 
-  /**
-   * Renderiza a lista de últimas senhas chamadas.
-   * @param {Array<object>} historico
-   */
   function renderHistory(historico = []) {
     if (!elements.historyListContainer) return;
 
@@ -150,9 +118,6 @@ document.addEventListener('DOMContentLoaded', () => {
     `).join('');
   }
 
-  /**
-   * Carrega o histórico inicial de chamadas via REST.
-   */
   async function loadInitialHistory() {
     try {
       const res = await fetch('/api/senhas/status');
@@ -165,9 +130,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /**
-   * Conecta ao stream de eventos SSE.
-   */
   function initSSE() {
     if (eventSource) eventSource.close();
 
@@ -190,7 +152,6 @@ document.addEventListener('DOMContentLoaded', () => {
         triggerVisualCallAlert();
         playCallAlert();
 
-        // Opcional: fala sintética após o chime (espera 600ms)
         setTimeout(() => speakTicket(data.senha, data.guiche), 600);
 
         if (Array.isArray(data.historico)) {
@@ -211,10 +172,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // Ativa áudio no primeiro clique na página (política de autoplay do browser)
   document.body.addEventListener('click', () => getAudioContext(), { once: true });
 
-  // Inicialização
   startClock();
   loadInitialHistory();
   initSSE();

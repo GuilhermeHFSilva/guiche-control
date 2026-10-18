@@ -1,6 +1,3 @@
-/**
- * @fileoverview Controlador do endpoint Server-Sent Events (SSE).
- */
 const defaultSseService = require('../services/sse.service');
 
 class SSEController {
@@ -9,11 +6,6 @@ class SSEController {
     this.connectStream = this.connectStream.bind(this);
   }
 
-  /**
-   * Conecta um cliente ao stream SSE.
-   * @param {import('express').Request} req
-   * @param {import('express').Response} res
-   */
   connectStream(req, res) {
     const { tipo = 'publico', guiche = null } = req.query;
     const guicheId = guiche ? Number(guiche) : null;

@@ -1,6 +1,3 @@
-/**
- * @fileoverview Rotas para operações e ações dos guichês de atendimento.
- */
 const express = require('express');
 const guicheController = require('../controllers/guiche.controller');
 

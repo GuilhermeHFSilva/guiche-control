@@ -136,7 +136,6 @@ body {
   background-color: #475569;
 }
 
-/* Animations */
 @keyframes pulse-glow {
   0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
   70% { transform: scale(1.02); box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); }

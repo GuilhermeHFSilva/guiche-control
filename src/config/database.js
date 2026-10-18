@@ -1,6 +1,3 @@
-/**
- * @fileoverview Conexão e inicialização do banco de dados SQLite via node:sqlite.
- */
 const { DatabaseSync } = require('node:sqlite');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -9,11 +6,6 @@ const env = require('./env');
 const SCHEMA_PATH = path.resolve(__dirname, '../../database/schema.sql');
 const SEEDS_PATH = path.resolve(__dirname, '../../database/seeds.sql');
 
-/**
- * Cria e configura uma nova instância de banco de dados SQLite.
- * @param {string} [databasePath=env.DB_PATH] Caminho do arquivo ou ':memory:'
- * @returns {DatabaseSync}
- */
 function createDatabase(databasePath = env.DB_PATH) {
   if (databasePath !== ':memory:') {
     const dbDir = path.dirname(databasePath);
@@ -33,10 +25,6 @@ function createDatabase(databasePath = env.DB_PATH) {
   return dbInstance;
 }
 
-/**
- * Executa scripts DDL e seeds iniciais se existirem.
- * @param {DatabaseSync} dbInstance
- */
 function initDatabase(dbInstance) {
   if (fs.existsSync(SCHEMA_PATH)) {
     const schemaSql = fs.readFileSync(SCHEMA_PATH, 'utf8');
@@ -53,17 +41,12 @@ function initDatabase(dbInstance) {
   }
 }
 
-/**
- * Fecha a conexão de forma segura.
- * @param {DatabaseSync} [dbInstance]
- */
 function closeDatabase(dbInstance = defaultDb) {
   if (dbInstance && typeof dbInstance.close === 'function') {
     dbInstance.close();
   }
 }
 
-// Instância singleton padrão para o ciclo de vida da aplicação
 const defaultDb = createDatabase();
 
 module.exports = defaultDb;

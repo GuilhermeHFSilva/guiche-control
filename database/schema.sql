@@ -1,5 +1,3 @@
--- Schema do Banco de Dados - Sistema SSE de Gestão de Filas (SSE1)
-
 CREATE TABLE IF NOT EXISTS CATEGORIA_SENHA (
     id_categoria INTEGER PRIMARY KEY AUTOINCREMENT,
     codigo_prefixo VARCHAR(5) NOT NULL UNIQUE,

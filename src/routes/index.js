@@ -1,6 +1,3 @@
-/**
- * @fileoverview Agregador central das rotas da API REST e SSE sob /api.
- */
 const express = require('express');
 const atendimentoRoutes = require('./atendimento.routes');
 const senhaRoutes = require('./senha.routes');

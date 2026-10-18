@@ -1,38 +1,22 @@
-/**
- * @fileoverview Repositório para operações na tabela SENHA.
- */
 const defaultDb = require('../config/database');
 const { STATUS_SENHA } = require('../constants');
 
 class SenhaRepository {
-  /**
-   * @param {import('node:sqlite').DatabaseSync} [database=defaultDb]
-   */
   constructor(database = defaultDb) {
     this.db = database;
   }
 
-  /**
-   * Obtém o próximo número sequencial do dia para a categoria informada.
-   * @param {number} idCategoria
-   * @returns {number}
-   */
   getProximoNumeroSequencial(idCategoria) {
     const query = this.db.prepare(`
       SELECT COALESCE(MAX(numero_sequencial), 0) + 1 AS proximo
       FROM SENHA 
       WHERE id_categoria = ? 
-        AND DATE(data_hora_emissao) = DATE('now', 'localtime')
+        AND DATE(data_hora_emissao, 'localtime') = DATE('now', 'localtime')
     `);
     const res = query.get(Number(idCategoria));
     return res ? Number(res.proximo) : 1;
   }
 
-  /**
-   * Insere uma nova senha com status AGUARDANDO.
-   * @param {{ id_categoria: number, numero_sequencial: number, codigo_senha: string }} params
-   * @returns {object|undefined}
-   */
   create({ id_categoria, numero_sequencial, codigo_senha }) {
     const stmt = this.db.prepare(`
       INSERT INTO SENHA (id_categoria, numero_sequencial, codigo_senha, status_senha, data_hora_emissao)
@@ -42,11 +26,6 @@ class SenhaRepository {
     return this.findById(info.lastInsertRowid);
   }
 
-  /**
-   * Busca uma senha pelo ID com dados da categoria.
-   * @param {number} idSenha
-   * @returns {object|undefined}
-   */
   findById(idSenha) {
     const stmt = this.db.prepare(`
       SELECT s.*, c.codigo_prefixo, c.nome_categoria, c.nivel_prioridade
@@ -58,11 +37,6 @@ class SenhaRepository {
     return stmt.get(Number(idSenha));
   }
 
-  /**
-   * Busca a próxima senha elegível para atendimento respeitando a prioridade legal
-   * (Preferencial > Convencional > Exames) e ordem de chegada (FIFO).
-   * @returns {object|undefined}
-   */
   findNextPendingTicket() {
     const stmt = this.db.prepare(`
       SELECT s.*, c.codigo_prefixo, c.nome_categoria, c.nivel_prioridade
@@ -75,13 +49,6 @@ class SenhaRepository {
     return stmt.get();
   }
 
-  /**
-   * Atualização atômica de status para evitar 'race conditions' entre múltiplos atendentes.
-   * @param {number} idSenha
-   * @param {string} novoStatus
-   * @param {string} [statusEsperado='AGUARDANDO']
-   * @returns {boolean} Retorna true se atualizou com sucesso ou false se já foi alterada por outro processo
-   */
   claimTicketAtomic(idSenha, novoStatus = STATUS_SENHA.EM_ATENDIMENTO, statusEsperado = STATUS_SENHA.AGUARDANDO) {
     const stmt = this.db.prepare(`
       UPDATE SENHA 
@@ -92,12 +59,6 @@ class SenhaRepository {
     return result.changes > 0;
   }
 
-  /**
-   * Atualiza o status de uma senha.
-   * @param {number} idSenha
-   * @param {string} statusSenha
-   * @returns {object|undefined}
-   */
   updateStatus(idSenha, statusSenha) {
     const stmt = this.db.prepare(`
       UPDATE SENHA 
@@ -108,12 +69,6 @@ class SenhaRepository {
     return this.findById(idSenha);
   }
 
-  /**
-   * Calcula a posição da senha na fila de sua categoria.
-   * @param {number} idSenha
-   * @param {number} idCategoria
-   * @returns {number}
-   */
   getPosicaoFila(idSenha, idCategoria) {
     const stmt = this.db.prepare(`
       SELECT COUNT(*) as posicao
@@ -126,10 +81,6 @@ class SenhaRepository {
     return res ? Number(res.posicao) : 1;
   }
 
-  /**
-   * Retorna estatísticas consolidadas da fila em uma única consulta de alta performance.
-   * @returns {{ totalAguardando: number, filaPreferencial: number, filaConvencional: number, filaExames: number, tempoMedioEsperaMinutos: number }}
-   */
   getQueueStats() {
     const stmt = this.db.prepare(`
       SELECT 
@@ -148,7 +99,6 @@ class SenhaRepository {
     const filaConvencional = Number(res.filaConvencional) || 0;
     const filaExames = Number(res.filaExames) || 0;
 
-    // Estimativa de ~2.5 minutos por atendimento
     const tempoMedioEsperaMinutos = totalAguardando > 0 ? Math.max(1, Math.round(totalAguardando * 2.5)) : 0;
 
     return {
@@ -160,11 +110,6 @@ class SenhaRepository {
     };
   }
 
-  /**
-   * Retorna as últimas senhas chamadas com formato adequado para exibição no painel da TV.
-   * @param {number} [limit=5]
-   * @returns {Array<object>}
-   */
   getUltimasChamadas(limit = 5) {
     const stmt = this.db.prepare(`
       SELECT 
@@ -182,10 +127,6 @@ class SenhaRepository {
     return stmt.all(Number(limit));
   }
 
-  /**
-   * Retorna a lista detalhada de senhas aguardando atendimento.
-   * @returns {Array<object>}
-   */
   getFilaPendenteDetalhada() {
     const stmt = this.db.prepare(`
       SELECT 

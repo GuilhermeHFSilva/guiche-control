@@ -1,7 +1,3 @@
-/**
- * @fileoverview Regras de negócio para emissão, fila, chamadas e finalização de senhas.
- * Aplica os princípios de Clean Code (funções pequenas, SRP, nomes expressivos e atomicidade).
- */
 const defaultSenhaRepo = require('../repositories/senha.repository');
 const defaultCategoriaRepo = require('../repositories/categoria.repository');
 const defaultGuicheRepo = require('../repositories/guiche.repository');
@@ -25,11 +21,6 @@ class FilaService {
     this.sseService = sseService;
   }
 
-  /**
-   * Resolve a categoria a partir do código ou nome informado.
-   * @param {string} [categoriaIdentificador='CONVENCIONAL']
-   * @returns {object}
-   */
   resolverCategoria(categoriaIdentificador = 'CONVENCIONAL') {
     const termo = String(categoriaIdentificador).trim().toUpperCase();
 
@@ -48,11 +39,6 @@ class FilaService {
     return this.categoriaRepo.findByPrefix(CATEGORIAS.CONVENCIONAL.prefixo) || CATEGORIAS.CONVENCIONAL;
   }
 
-  /**
-   * Emite uma nova senha no totem e atualiza painéis via SSE.
-   * @param {{ categoria?: string, totemId?: string }} params
-   * @returns {object}
-   */
   gerarSenha({ categoria = 'CONVENCIONAL', totemId = 'TOTEM-01' } = {}) {
     const cat = this.resolverCategoria(categoria);
     const idCategoria = cat.id_categoria || cat.id;
@@ -88,11 +74,6 @@ class FilaService {
     };
   }
 
-  /**
-   * Chama a próxima senha com prioridade legal (Preferencial > Convencional > Exames).
-   * @param {{ guicheId: number, atendenteId?: string }} params
-   * @returns {object}
-   */
   chamarProximaSenha({ guicheId, atendenteId = 'ATD-100' }) {
     const guiche = this._obterGuicheValido(guicheId);
     const proximaSenha = this._obterProximaSenhaDisponivel();
@@ -104,7 +85,6 @@ class FilaService {
       };
     }
 
-    // Registra a sessão de atendimento
     this.atendimentoRepo.create({
       id_senha: proximaSenha.id_senha,
       id_guiche: guiche.id_guiche
@@ -140,11 +120,6 @@ class FilaService {
     };
   }
 
-  /**
-   * Reanuncia a última senha chamada no guichê.
-   * @param {{ guicheId: number }} params
-   * @returns {object}
-   */
   rechamarSenha({ guicheId }) {
     const guiche = this._obterGuicheValido(guicheId);
     const ultimoAtendimento = this.atendimentoRepo.findUltimoAtendimentoPorGuiche(guiche.id_guiche);
@@ -178,11 +153,6 @@ class FilaService {
     };
   }
 
-  /**
-   * Marca o atendimento atual como cancelado por ausência do cliente.
-   * @param {{ guicheId: number }} params
-   * @returns {object}
-   */
   marcarAusente({ guicheId }) {
     const guiche = this._obterGuicheValido(guicheId);
     const ultimoAtendimento = this.atendimentoRepo.findUltimoAtendimentoPorGuiche(guiche.id_guiche);
@@ -204,11 +174,6 @@ class FilaService {
     };
   }
 
-  /**
-   * Conclui com sucesso a sessão de atendimento do guichê.
-   * @param {{ guicheId: number }} params
-   * @returns {object}
-   */
   finalizarAtendimento({ guicheId }) {
     const guiche = this._obterGuicheValido(guicheId);
     const ultimoAtendimento = this.atendimentoRepo.findUltimoAtendimentoPorGuiche(guiche.id_guiche);
@@ -230,8 +195,6 @@ class FilaService {
       mensagem: `Atendimento da senha ${ultimoAtendimento.codigo_senha} finalizado com sucesso.`
     };
   }
-
-  // Métodos auxiliares privados para manter funções pequenas e foco único (Clean Code)
 
   _obterGuicheValido(identificadorGuiche) {
     if (!identificadorGuiche) {

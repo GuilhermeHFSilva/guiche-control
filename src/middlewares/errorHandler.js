@@ -1,10 +1,5 @@
-/**
- * @fileoverview Middleware centralizado de tratamento de erros.
- * Garante respostas JSON consistentes e tratamento de exceções operacionais vs não tratadas.
- */
 const env = require('../config/env');
 
-// eslint-disable-next-line no-unused-vars
 function errorHandler(err, req, res, next) {
   const isOperational = Boolean(err.isOperational);
   const statusCode = err.statusCode || (isOperational ? 400 : 500);

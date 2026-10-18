@@ -1,6 +1,3 @@
-/**
- * @fileoverview Controlador para ações e consultas relacionadas aos guichês de atendimento.
- */
 const defaultFilaService = require('../services/fila.service');
 const defaultGuicheRepo = require('../repositories/guiche.repository');
 const defaultAtendimentoService = require('../services/atendimento.service');
@@ -24,9 +21,6 @@ class GuicheController {
     this.obterGuiche = this.obterGuiche.bind(this);
   }
 
-  /**
-   * Chama a próxima senha com prioridade legal para o guichê.
-   */
   proximo(req, res, next) {
     try {
       const guicheId = this._extrairGuicheId(req.body);
@@ -38,9 +32,6 @@ class GuicheController {
     }
   }
 
-  /**
-   * Re-anuncia a senha atual no painel público.
-   */
   rechamar(req, res, next) {
     try {
       const guicheId = this._extrairGuicheId(req.body);
@@ -51,9 +42,6 @@ class GuicheController {
     }
   }
 
-  /**
-   * Marca o cliente atual como ausente e libera o guichê.
-   */
   ausente(req, res, next) {
     try {
       const guicheId = this._extrairGuicheId(req.body);
@@ -64,9 +52,6 @@ class GuicheController {
     }
   }
 
-  /**
-   * Conclui o atendimento atual no guichê.
-   */
   finalizar(req, res, next) {
     try {
       const guicheId = this._extrairGuicheId(req.body);
@@ -77,9 +62,6 @@ class GuicheController {
     }
   }
 
-  /**
-   * Lista todos os guichês operacionais cadastrados.
-   */
   listarGuiches(req, res, next) {
     try {
       const guiches = this.guicheRepo.findAll();
@@ -89,9 +71,6 @@ class GuicheController {
     }
   }
 
-  /**
-   * Consulta os dados de um guichê específico por ID ou número.
-   */
   obterGuiche(req, res, next) {
     try {
       const { id } = req.params;
@@ -107,10 +86,6 @@ class GuicheController {
     }
   }
 
-  /**
-   * Extrai o identificador numérico do guichê a partir do corpo da requisição.
-   * @private
-   */
   _extrairGuicheId(body = {}) {
     const rawId = body.guicheId ?? body.guiche ?? 1;
     return Number(rawId);

@@ -1,6 +1,3 @@
-/**
- * @fileoverview Serviço para consolidação de status e telemetria de atendimentos e guichês.
- */
 const defaultSenhaRepo = require('../repositories/senha.repository');
 const defaultGuicheRepo = require('../repositories/guiche.repository');
 const defaultAtendimentoRepo = require('../repositories/atendimento.repository');
@@ -16,10 +13,6 @@ class AtendimentoService {
     this.atendimentoRepo = atendimentoRepo;
   }
 
-  /**
-   * Retorna o panorama completo da fila para atendentes e painéis de monitoramento.
-   * @returns {{ stats: object, pendentes: Array<object>, ultimasChamadas: Array<object>, guiches: Array<object> }}
-   */
   getStatusFila() {
     const stats = this.senhaRepo.getQueueStats();
     const pendentes = this.senhaRepo.getFilaPendenteDetalhada();
@@ -34,11 +27,6 @@ class AtendimentoService {
     };
   }
 
-  /**
-   * Obtém os dados detalhados de um guichê e seu atendimento ativo/recente.
-   * @param {number} numeroGuiche
-   * @returns {object|null}
-   */
   getGuicheInfo(numeroGuiche) {
     const guiche = this.guicheRepo.findByNumero(numeroGuiche) || this.guicheRepo.findById(numeroGuiche);
     if (!guiche) return null;

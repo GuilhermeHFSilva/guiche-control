@@ -1,6 +1,3 @@
-/**
- * @fileoverview Ponto de entrada do servidor HTTP com suporte a graceful shutdown.
- */
 const app = require('./app');
 const env = require('./config/env');
 const sseService = require('./services/sse.service');
@@ -22,9 +19,6 @@ const server = app.listen(env.PORT, () => {
   `);
 });
 
-/**
- * Encerramento gracioso do servidor em caso de interrupção (SIGTERM/SIGINT).
- */
 function gracefulShutdown(signal) {
   console.log(`\n🛑 Sinal ${signal} recebido. Encerrando conexões graciosamente...`);
 
@@ -36,7 +30,6 @@ function gracefulShutdown(signal) {
     process.exit(0);
   });
 
-  // Força encerramento após 5 segundos se houver travamento
   setTimeout(() => {
     console.error('⚠️ Forçando encerramento imediato.');
     process.exit(1);

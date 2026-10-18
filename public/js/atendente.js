@@ -1,10 +1,4 @@
-/**
- * @fileoverview Lógica do Painel do Atendente (Guichê).
- * Gerencia chamadas, rechamadas, ausências e sincronização em tempo real via SSE.
- */
-
 document.addEventListener('DOMContentLoaded', () => {
-  // Elementos do DOM
   const elements = {
     guicheSelect: document.getElementById('guicheSelect'),
     operatorName: document.getElementById('operatorName'),
@@ -23,20 +17,12 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentGuicheId = Number.parseInt(elements.guicheSelect.value, 10);
   let eventSource = null;
 
-  /**
-   * Atualiza o badge indicador de status da conexão SSE.
-   * @param {string} status - Classe de status ('reconnecting' | 'disconnected' | '')
-   * @param {string} text - Texto descritivo
-   */
   function setStatusBadge(status, text) {
     if (!elements.statusSseBadge) return;
     elements.statusSseBadge.className = `status-badge ${status}`.trim();
     elements.statusSseBadge.innerHTML = `<span class="status-dot"></span> ${text}`;
   }
 
-  /**
-   * Inicializa o canal Server-Sent Events (SSE) com reconexão automática.
-   */
   function initSSE() {
     setStatusBadge('reconnecting', 'Reconectando...');
 
@@ -81,10 +67,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  /**
-   * Destaca visualmente a senha chamada no painel.
-   * @param {string} ticketCode
-   */
   function highlightCurrentTicket(ticketCode) {
     if (!elements.senhaAtualDisplay) return;
     elements.senhaAtualDisplay.textContent = ticketCode;
@@ -92,19 +74,12 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => elements.senhaAtualDisplay.classList.remove('flash-call'), 2000);
   }
 
-  /**
-   * Atualiza os cartões de estatísticas da fila.
-   * @param {object} stats
-   */
   function renderStatistics(stats = {}) {
     if (elements.statTotalAguardando) elements.statTotalAguardando.textContent = stats.totalAguardando ?? 0;
     if (elements.statFilaPreferencial) elements.statFilaPreferencial.textContent = stats.filaPreferencial ?? 0;
     if (elements.statFilaConvencional) elements.statFilaConvencional.textContent = stats.filaConvencional ?? 0;
   }
 
-  /**
-   * Busca e atualiza a listagem de senhas pendentes na fila.
-   */
   async function loadQueueStatus() {
     try {
       const res = await fetch('/api/senhas/status');
@@ -118,9 +93,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /**
-   * Carrega os dados operacionais do guichê selecionado.
-   */
   async function loadGuicheData() {
     try {
       const res = await fetch(`/api/guiches/${currentGuicheId}`);
@@ -141,10 +113,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadQueueStatus();
   }
 
-  /**
-   * Renderiza a tabela com as senhas em espera ordenadas por prioridade.
-   * @param {Array<object>} pendentes
-   */
   function renderQueueTable(pendentes) {
     if (!elements.queueTableBody) return;
 
@@ -168,11 +136,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
   }
 
-  /**
-   * Helper para envio de requisições de ação para a API.
-   * @param {string} endpoint
-   * @param {object} payload
-   */
   async function sendAction(endpoint, payload) {
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -181,8 +144,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     return res.json();
   }
-
-  // --- Handlers de Ações dos Botões ---
 
   elements.guicheSelect.addEventListener('change', (e) => {
     currentGuicheId = Number.parseInt(e.target.value, 10);
@@ -248,7 +209,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Inicialização
   loadGuicheData();
   initSSE();
 });

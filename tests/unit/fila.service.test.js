@@ -1,7 +1,3 @@
-/**
- * @fileoverview Testes unitários para o FilaService.
- * Valida a regra de negócio central, prioridade legal de atendimento e gestão de estados.
- */
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { createDatabase, closeDatabase } = require('../../src/config/database');
@@ -23,10 +19,9 @@ describe('FilaService - Regras de Negócio e Prioridade Legal', () => {
   let categoriaRepo;
 
   beforeEach(() => {
-    // Banco SQLite isolado em memória para testes 100% independentes e repetíveis
     db = createDatabase(':memory:');
     sseService = new SSEService();
-    sseService.stopHeartbeat(); // Desliga timer durante teste
+    sseService.stopHeartbeat();
 
     categoriaRepo = new CategoriaRepository(db);
     guicheRepo = new GuicheRepository(db);
@@ -65,22 +60,18 @@ describe('FilaService - Regras de Negócio e Prioridade Legal', () => {
   });
 
   it('deve priorizar estritamente senhas Preferenciais (P) sobre Convencionais (C) e Exames (E)', () => {
-    // Cenário: Chega primeiro uma convencional, depois um exame, e por último uma preferencial
-    filaService.gerarSenha({ categoria: 'CONVENCIONAL' }); // C-001
-    filaService.gerarSenha({ categoria: 'EXAMES' });        // E-001
-    filaService.gerarSenha({ categoria: 'PREFERENCIAL' });   // P-001
+    filaService.gerarSenha({ categoria: 'CONVENCIONAL' });
+    filaService.gerarSenha({ categoria: 'EXAMES' });
+    filaService.gerarSenha({ categoria: 'PREFERENCIAL' });
 
-    // 1º Chamado: DEVE ser a preferencial P-001 (Prioridade 1)
     const chamada1 = filaService.chamarProximaSenha({ guicheId: 1 });
     assert.equal(chamada1.sucesso, true);
     assert.equal(chamada1.senhaChamada, 'P-001');
 
-    // 2º Chamado: DEVE ser a convencional C-001 (Prioridade 2)
     const chamada2 = filaService.chamarProximaSenha({ guicheId: 2 });
     assert.equal(chamada2.sucesso, true);
     assert.equal(chamada2.senhaChamada, 'C-001');
 
-    // 3º Chamado: DEVE ser a entrega de exames E-001 (Prioridade 3)
     const chamada3 = filaService.chamarProximaSenha({ guicheId: 3 });
     assert.equal(chamada3.sucesso, true);
     assert.equal(chamada3.senhaChamada, 'E-001');

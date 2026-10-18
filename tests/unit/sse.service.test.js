@@ -1,15 +1,8 @@
-/**
- * @fileoverview Testes unitários para o SSEService.
- * Valida o ciclo de vida de conexões SSE, headers, formatação de eventos e broadcast.
- */
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { SSEService } = require('../../src/services/sse.service');
 const { EventEmitter } = require('node:events');
 
-/**
- * Mock para Response HTTP do Express/Node.
- */
 class MockResponse extends EventEmitter {
   constructor() {
     super();
@@ -35,9 +28,6 @@ class MockResponse extends EventEmitter {
   }
 }
 
-/**
- * Mock para Request HTTP do Express/Node.
- */
 class MockRequest extends EventEmitter {
   constructor() {
     super();
@@ -69,7 +59,6 @@ describe('SSEService - Gerenciamento de Conexões e Broadcast', () => {
     assert.equal(res.headers['Connection'], 'keep-alive');
     assert.equal(sseService.getActiveClientsCount(), 1);
 
-    // Deve ter enviado comentário de abertura e evento CONNECTED
     const output = res.buffer.join('');
     assert.ok(output.includes(': SSE Connection Established'));
     assert.ok(output.includes('event: CONNECTED'));
@@ -102,7 +91,6 @@ describe('SSEService - Gerenciamento de Conexões e Broadcast', () => {
     sseService.addClient(req, res);
     assert.equal(sseService.getActiveClientsCount(), 1);
 
-    // Simula desconexão do cliente
     req.emit('close');
     assert.equal(sseService.getActiveClientsCount(), 0);
   });

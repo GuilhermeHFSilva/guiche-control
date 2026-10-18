@@ -1,8 +1,3 @@
-/**
- * @fileoverview Lógica do Totem de Autoatendimento touch-screen.
- * Gerencia a emissão de senhas por categoria e a exibição do bilhete térmico simulado.
- */
-
 document.addEventListener('DOMContentLoaded', () => {
   const elements = {
     btnPreferencial: document.getElementById('btnPreferencial'),
@@ -18,20 +13,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let modalTimerInterval = null;
 
-  /**
-   * Habilita ou desabilita os botões para evitar emissões duplicadas por toque acidental.
-   * @param {boolean} disabled
-   */
   function setButtonsDisabled(disabled) {
     if (elements.btnPreferencial) elements.btnPreferencial.disabled = disabled;
     if (elements.btnConvencional) elements.btnConvencional.disabled = disabled;
     if (elements.btnExames) elements.btnExames.disabled = disabled;
   }
 
-  /**
-   * Dispara a emissão de senha no backend para a categoria selecionada.
-   * @param {string} categoria
-   */
   async function emitirSenha(categoria) {
     setButtonsDisabled(true);
     try {
@@ -59,9 +46,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /**
-   * Fecha o modal de comprovante e limpa os timers.
-   */
   function fecharModal() {
     if (modalTimerInterval) {
       clearInterval(modalTimerInterval);
@@ -72,10 +56,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /**
-   * Exibe o modal com visual de bilhete impresso e inicia temporizador de retorno.
-   * @param {object} ticketData
-   */
   function exibirComprovante(ticketData) {
     if (elements.modalSenhaCode) elements.modalSenhaCode.textContent = ticketData.senhaEmitida;
     if (elements.modalCategoriaName) elements.modalCategoriaName.textContent = ticketData.categoria;
@@ -109,11 +89,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 1000);
   }
 
-  // Listeners de seleção de categoria
   elements.btnPreferencial?.addEventListener('click', () => emitirSenha('PREFERENCIAL'));
   elements.btnConvencional?.addEventListener('click', () => emitirSenha('CONVENCIONAL'));
   elements.btnExames?.addEventListener('click', () => emitirSenha('EXAMES'));
 
-  // Fechar comprovante ao clicar sobre o overlay
   elements.ticketModalOverlay?.addEventListener('click', fecharModal);
 });

@@ -1,9 +1,7 @@
-/**
- * @fileoverview Testes de integração de endpoints REST e SSE da API.
- */
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+process.env.DB_PATH = ':memory:';
 const app = require('../../src/app');
 
 describe('API Integration Tests', () => {
@@ -11,7 +9,6 @@ describe('API Integration Tests', () => {
   let baseUrl;
 
   before(async () => {
-    // Inicia o app em uma porta dinâmica (0)
     server = http.createServer(app);
     await new Promise((resolve) => {
       server.listen(0, '127.0.0.1', () => {

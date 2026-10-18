@@ -1,8 +1,3 @@
-/**
- * @fileoverview Constantes do domínio de gestão de filas e atendimento.
- * Centraliza enums e valores estáticos para evitar 'magic strings' e garantir manutenibilidade.
- */
-
 const CATEGORIAS = Object.freeze({
   PREFERENCIAL: {
     id: 1,

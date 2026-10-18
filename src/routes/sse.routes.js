@@ -1,6 +1,3 @@
-/**
- * @fileoverview Rotas dedicadas de SSE stream.
- */
 const express = require('express');
 const sseController = require('../controllers/sse.controller');
 
